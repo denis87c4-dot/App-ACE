@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import pandas as pd
 import streamlit as st
 
@@ -65,15 +66,15 @@ st.markdown(
     """
     <div style="padding: 15px 0; border-bottom: 2px solid #F1F5F9; margin-bottom: 25px;">
         <h1 style="margin:0; font-size: 32px;">🏡 Gestão de Campo - ACE</h1>
-        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema inteligente de registro de visitas e controle de imóveis fechados e recuperados.</p>
+        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema inteligente de registro, controle de imóveis fechados e backup de segurança.</p>
     </div>
 """,
     unsafe_allow_html=True,
 )
 
-# Abas do Aplicativo (Cadastro vs Gerenciamento/Busca)
-aba_cadastro, aba_busca = st.tabs(
-    ["📝 Registrar Visita", "🔍 Gerenciamento e Pendências (Fechadas)"]
+# Abas do Aplicativo
+aba_cadastro, aba_busca, aba_backup = st.tabs(
+    ["📝 Registrar Visita", "🔍 Gerenciamento e Fechadas", "💾 Central de Backup"]
 )
 
 with aba_cadastro:
@@ -112,7 +113,7 @@ with aba_cadastro:
             """
             <div class="metric-card">
                 <h3>Status do Sistema</h3>
-                <p style="color: #16A34A; font-size: 20px; margin-top: 10px;">● Online</p>
+                <p style="color: #16A34A; font-size: 20px; margin-top: 10px;">● Online & Seguro</p>
             </div>
         """,
             unsafe_allow_html=True,
@@ -188,7 +189,7 @@ with aba_cadastro:
 with aba_busca:
     st.subheader("🔍 Gerenciamento Inteligente de Imóveis Fechados")
     st.markdown(
-        "Filtre por quarteirão para identificar rapidamente quais casas continuam pendentes e quais já foram **recuperadas**, evitando duplicidade de trabalho."
+        "Filtre por quarteirão para identificar quais casas continuam pendentes e quais já foram recuperadas, evitando duplicidade."
     )
 
     if not st.session_state.vistorias:
@@ -196,7 +197,6 @@ with aba_busca:
     else:
         df_busca = pd.DataFrame(st.session_state.vistorias)
 
-        # Filtros de busca
         col_f1, col_f2 = st.columns(2)
         with col_f1:
             quart_unicos = sorted(df_busca["Quarteirao"].unique().tolist())
@@ -209,8 +209,6 @@ with aba_busca:
                 ["Todos", "Apenas Fechadas Pendentes", "Recuperadas", "Normal"],
             )
 
-        # Aplicando lógica de cruzamento (Casas que foram fechadas mas depois recuperadas)
-        # Identificamos chaves unicas de imoveis (Quarteirão + Rua + Número)
         df_busca["Chave_Imovel"] = (
             df_busca["Quarteirao"]
             + " - "
@@ -219,7 +217,6 @@ with aba_busca:
             + df_busca["Numero"]
         )
 
-        # Filtragem dinâmica
         df_filtrado = df_busca.copy()
         if filtro_quarteirao != "Todos":
             df_filtrado = df_filtrado[
@@ -227,7 +224,6 @@ with aba_busca:
             ]
 
         if filtro_status == "Apenas Fechadas Pendentes":
-            # Imóveis que tiveram status 'Fechada' e cuja última ocorrência NÃO seja 'Recuperada'
             imoveis_recuperados = set(
                 df_busca[df_busca["Visita"] == "Recuperada"]["Chave_Imovel"]
             )
@@ -261,6 +257,31 @@ with aba_busca:
                 use_container_width=True,
             )
         else:
-            st.success(
-                "🎉 Nenhum imóvel pendente ou encontrado com esses critérios! Trabalho em dia."
-            )
+            st.success("🎉 Nenhum imóvel pendente com esses critérios!")
+
+with aba_backup:
+    st.subheader("🔒 Central de Segurança e Backup Manual")
+    st.markdown(
+        "Proteja seus dados! Clique no botão abaixo para baixar um arquivo de segurança com todas as suas vistorias diretamente para o seu celular."
+    )
+
+    if st.session_state.vistorias:
+        # Transformar os dados salvos em formato JSON para backup
+        dados_json = json.dumps(
+            st.session_state.vistorias, ensure_ascii=False, indent=4
+        )
+        data_atual = datetime.today().strftime("%Y-%m-%d_%H-%M")
+
+        st.download_button(
+            label="💾 Salvar Backup Manual",
+            data=dados_json,
+            file_name=f"backup_ace_{data_atual}.json",
+            mime="application/json",
+        )
+        st.success(
+            "💡 Dica: Após salvar o arquivo de backup, você pode guardá-lo no seu Google Drive ou enviá-lo para você mesmo no WhatsApp!"
+        )
+    else:
+        st.info(
+            "⚠️ Não há dados cadastrados ainda para gerar o backup de segurança."
+        )

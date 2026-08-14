@@ -65,112 +65,202 @@ st.markdown(
     """
     <div style="padding: 15px 0; border-bottom: 2px solid #F1F5F9; margin-bottom: 25px;">
         <h1 style="margin:0; font-size: 32px;">🏡 Gestão de Campo - ACE</h1>
-        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema inteligente de registro de visitas e controle de imóveis fechados.</p>
+        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema inteligente de registro de visitas e controle de imóveis fechados e recuperados.</p>
     </div>
 """,
     unsafe_allow_html=True,
 )
 
-col_m1, col_m2, col_m3 = st.columns(3)
-total_visitas = len(st.session_state.vistorias)
-fechadas_count = sum(
-    1
-    for v in st.session_state.vistorias
-    if v.get("Visita") == "Fechada"
+# Abas do Aplicativo (Cadastro vs Gerenciamento/Busca)
+aba_cadastro, aba_busca = st.tabs(
+    ["📝 Registrar Visita", "🔍 Gerenciamento e Pendências (Fechadas)"]
 )
 
-with col_m1:
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <h3>Total Registrado</h3>
-            <p>{total_visitas}</p>
-        </div>
-    """,
-        unsafe_allow_html=True,
+with aba_cadastro:
+    col_m1, col_m2, col_m3 = st.columns(3)
+    total_visitas = len(st.session_state.vistorias)
+    fechadas_count = sum(
+        1
+        for v in st.session_state.vistorias
+        if v.get("Visita") == "Fechada"
     )
 
-with col_m2:
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <h3>Imóveis Fechados</h3>
-            <p style="color: #DC2626;">{fechadas_count}</p>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-with col_m3:
-    st.markdown(
-        """
-        <div class="metric-card">
-            <h3>Status do Sistema</h3>
-            <p style="color: #16A34A; font-size: 20px; margin-top: 10px;">● Online</p>
-        </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-st.write("---")
-st.subheader("📝 Novo Registro de Visita")
-
-with st.form("form_ace", clear_on_submit=True):
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        data_visita = st.date_input("Data", value=datetime.today())
-        quarteirao = st.text_input(
-            "Número do Quarteirão", placeholder="Ex: 142"
+    with col_m1:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <h3>Total Registrado</h3>
+                <p>{total_visitas}</p>
+            </div>
+        """,
+            unsafe_allow_html=True,
         )
-        lado = st.text_input("Lado", placeholder="Ex: A ou Norte")
 
-    with col2:
-        rua = st.text_input("Rua / Logradouro", placeholder="Ex: Rua das Flores")
-        numero_imovel = st.text_input("Número do Imóvel", placeholder="Ex: 450")
-        hora_entrada = st.time_input("Hora da Entrada", value=datetime.now())
+    with col_m2:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <h3>Imóveis Fechados</h3>
+                <p style="color: #DC2626;">{fechadas_count}</p>
+            </div>
+        """,
+            unsafe_allow_html=True,
+        )
 
-    with col3:
+    with col_m3:
+        st.markdown(
+            """
+            <div class="metric-card">
+                <h3>Status do Sistema</h3>
+                <p style="color: #16A34A; font-size: 20px; margin-top: 10px;">● Online</p>
+            </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+    st.write("---")
+    st.subheader("📝 Novo Registro de Visita")
+
+    with st.form("form_ace", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            data_visita = st.date_input("Data", value=datetime.today())
+            quarteirao = st.text_input(
+                "Número do Quarteirão", placeholder="Ex: 142"
+            )
+            lado = st.text_input("Lado", placeholder="Ex: A ou Norte")
+
+        with col2:
+            rua = st.text_input(
+                "Rua / Logradouro", placeholder="Ex: Rua das Flores"
+            )
+            numero_imovel = st.text_input(
+                "Número do Imóvel", placeholder="Ex: 450"
+            )
+            hora_entrada = st.time_input("Hora da Entrada", value=datetime.now())
+
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            tipo_imovel = st.selectbox(
+                "Tipo do Imóvel", ["Outros", "Residencia", "TB", "Comércio"]
+            )
+            status_visita = st.selectbox(
+                "Condição da Visita", ["Normal", "Recuperada", "Fechada"]
+            )
+
         st.markdown("<br>", unsafe_allow_html=True)
-        tipo_imovel = st.selectbox(
-            "Tipo do Imóvel", ["Outros", "Residencia", "TB", "Comércio"]
-        )
-        status_visita = st.selectbox(
-            "Condição da Visita", ["Normal", "Recuperada", "Fechada"]
+        submitted = st.form_submit_button("💾 Salvar Registro de Visita")
+
+        if submitted:
+            if not quarteirao or not rua or not numero_imovel:
+                st.warning(
+                    "⚠️ Por favor, preencha Quarteirão, Rua e Número do Imóvel."
+                )
+            else:
+                nova_vistoria = {
+                    "Data": data_visita.strftime("%d/%m/%Y"),
+                    "Quarteirao": str(quarteirao).strip(),
+                    "Lado": lado,
+                    "Rua": rua,
+                    "Numero": str(numero_imovel).strip(),
+                    "Tipo Imovel": tipo_imovel,
+                    "Hora": hora_entrada.strftime("%H:%M"),
+                    "Visita": status_visita,
+                }
+                st.session_state.vistorias.append(nova_vistoria)
+                st.success("✅ Visita cadastrada com sucesso!")
+
+    if st.session_state.vistorias:
+        st.write("---")
+        st.subheader("📊 Histórico Geral da Sessão")
+        df_geral = pd.DataFrame(st.session_state.vistorias)
+        st.dataframe(df_geral, use_container_width=True)
+
+        csv = df_geral.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 Baixar Relatório em CSV",
+            data=csv,
+            file_name=f"vistorias_ace_{datetime.today().strftime('%Y-%m-%d')}.csv",
+            mime="text/csv",
         )
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    submitted = st.form_submit_button("💾 Salvar Registro de Visita")
+with aba_busca:
+    st.subheader("🔍 Gerenciamento Inteligente de Imóveis Fechados")
+    st.markdown(
+        "Filtre por quarteirão para identificar rapidamente quais casas continuam pendentes e quais já foram **recuperadas**, evitando duplicidade de trabalho."
+    )
 
-    if submitted:
-        if not quarteirao or not rua:
-            st.warning(
-                "⚠️ Por favor, preencha pelo menos o Quarteirão e a Rua."
+    if not st.session_state.vistorias:
+        st.info("Nenhuma vistoria registrada ainda para realizar buscas.")
+    else:
+        df_busca = pd.DataFrame(st.session_state.vistorias)
+
+        # Filtros de busca
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            quart_unicos = sorted(df_busca["Quarteirao"].unique().tolist())
+            filtro_quarteirao = st.selectbox(
+                "Filtrar por Quarteirão", ["Todos"] + quart_unicos
+            )
+        with col_f2:
+            filtro_status = st.selectbox(
+                "Filtrar por Status de Visita",
+                ["Todos", "Apenas Fechadas Pendentes", "Recuperadas", "Normal"],
+            )
+
+        # Aplicando lógica de cruzamento (Casas que foram fechadas mas depois recuperadas)
+        # Identificamos chaves unicas de imoveis (Quarteirão + Rua + Número)
+        df_busca["Chave_Imovel"] = (
+            df_busca["Quarteirao"]
+            + " - "
+            + df_busca["Rua"]
+            + " - N° "
+            + df_busca["Numero"]
+        )
+
+        # Filtragem dinâmica
+        df_filtrado = df_busca.copy()
+        if filtro_quarteirao != "Todos":
+            df_filtrado = df_filtrado[
+                df_filtrado["Quarteirao"] == filtro_quarteirao
+            ]
+
+        if filtro_status == "Apenas Fechadas Pendentes":
+            # Imóveis que tiveram status 'Fechada' e cuja última ocorrência NÃO seja 'Recuperada'
+            imoveis_recuperados = set(
+                df_busca[df_busca["Visita"] == "Recuperada"]["Chave_Imovel"]
+            )
+            df_filtrado = df_filtrado[
+                (df_filtrado["Visita"] == "Fechada")
+                & (~df_filtrado["Chave_Imovel"].isin(imoveis_recuperados))
+            ]
+        elif filtro_status == "Recuperadas":
+            df_filtrado = df_filtrado[df_filtrado["Visita"] == "Recuperada"]
+        elif filtro_status == "Normal":
+            df_filtrado = df_filtrado[df_filtrado["Visita"] == "Normal"]
+
+        st.write("---")
+        st.markdown(
+            f"### 📋 Resultados Encontrados ({len(df_filtrado)} registros)"
+        )
+
+        if not df_filtrado.empty:
+            st.dataframe(
+                df_filtrado[
+                    [
+                        "Data",
+                        "Quarteirao",
+                        "Lado",
+                        "Rua",
+                        "Numero",
+                        "Tipo Imovel",
+                        "Visita",
+                    ]
+                ],
+                use_container_width=True,
             )
         else:
-            nova_vistoria = {
-                "Data": data_visita.strftime("%d/%m/%Y"),
-                "Quarteirão": quarteirao,
-                "Lado": lado,
-                "Rua": rua,
-                "Número": numero_imovel,
-                "Tipo Imóvel": tipo_imovel,
-                "Hora": hora_entrada.strftime("%H:%M"),
-                "Visita": status_visita,
-            }
-            st.session_state.vistorias.append(nova_vistoria)
-            st.success("✅ Visita cadastrada com sucesso!")
-
-if st.session_state.vistorias:
-    st.write("---")
-    st.subheader("📊 Vistorias Realizadas Nesta Sessão")
-    df = pd.DataFrame(st.session_state.vistorias)
-    st.dataframe(df, use_container_width=True)
-
-    csv = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Baixar Relatório em CSV",
-        data=csv,
-        file_name=f"vistorias_ace_{datetime.today().strftime('%Y-%m-%d')}.csv",
-        mime="text/csv",
-    )
+            st.success(
+                "🎉 Nenhum imóvel pendente ou encontrado com esses critérios! Trabalho em dia."
+            )

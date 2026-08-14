@@ -66,7 +66,7 @@ st.markdown(
     """
     <div style="padding: 15px 0; border-bottom: 2px solid #F1F5F9; margin-bottom: 25px;">
         <h1 style="margin:0; font-size: 32px;">🏡 Gestão de Campo - ACE</h1>
-        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema completo de registro, filtros avançados, histórico duplo e backup de segurança.</p>
+        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema completo de registro, filtros avançados, histórico duplo e restauração por backup.</p>
     </div>
 """,
     unsafe_allow_html=True,
@@ -85,7 +85,6 @@ with aba_cadastro:
     col_m1, col_m2, col_m3 = st.columns(3)
     total_visitas = len(st.session_state.vistorias)
 
-    # Identificar chaves únicas já recuperadas para calcular as fechadas pendentes reais
     imoveis_recuperados_geral = set()
     for v in st.session_state.vistorias:
         if v.get("Visita") == "Recuperada":
@@ -203,7 +202,7 @@ with aba_cadastro:
 with aba_busca:
     st.subheader("🔍 Gerenciamento Avançado & Painel de Recuperação")
     st.markdown(
-        "Filtre os dados ou utilize o painel interativo abaixo. Ao marcar uma casa fechada como recuperada, **o histórico original da fechada permanece salvo**, e um novo registro oficial de recuperação é gerado automaticamente!"
+        "Filtre os dados ou utilize o painel interativo abaixo para converter casas fechadas em recuperadas."
     )
 
     if not st.session_state.vistorias:
@@ -286,13 +285,8 @@ with aba_busca:
         else:
             st.success("🎉 Nenhum imóvel encontrado com estes filtros!")
 
-        # PAINEL INTERATIVO COM HISTÓRICO DUPLO (MANTÉM FECHADA + CRIA RECUPERADA)
         st.write("---")
         st.subheader("⚡ Painel de Conversão: Registrar Recuperação")
-        st.markdown(
-            "Marque a caixa ao lado da casa fechada que você visitou. O app manterá o histórico original da fechada e adicionará um novo registro de recuperada."
-        )
-
         df_pendentes_painel = df_busca[
             (df_busca["Visita"] == "Fechada")
             & (~df_busca["Chave_Imovel"].isin(imoveis_recuperados_set))
@@ -307,7 +301,6 @@ with aba_busca:
                     )
                 with col_check:
                     if st.checkbox("Recuperar", key=f"rec_{idx}"):
-                        # Cria um NOVO registro de Recuperada mantendo o antigo de Fechada no histórico
                         novo_registro_recuperado = {
                             "Data": datetime.today().strftime("%d/%m/%Y"),
                             "Quarteirao": row["Quarteirao"],
@@ -322,7 +315,7 @@ with aba_busca:
                             novo_registro_recuperado
                         )
                         st.success(
-                            "✅ Histórico de Fechada mantido + Recuperação registrada!"
+                            "✅ Histórico mantido + Recuperação registrada!"
                         )
                         st.rerun()
         else:
@@ -331,27 +324,48 @@ with aba_busca:
             )
 
 with aba_backup:
-    st.subheader("🔒 Central de Segurança e Backup Manual")
-    st.markdown(
-        "Proteja seus dados! Clique no botão abaixo para baixar um arquivo de segurança com todo o seu histórico completo diretamente para o seu celular."
-    )
+    st.subheader("🔒 Central de Segurança e Backup")
 
-    if st.session_state.vistorias:
-        dados_json = json.dumps(
-            st.session_state.vistorias, ensure_ascii=False, indent=4
-        )
-        data_atual = datetime.today().strftime("%Y-%m-%d_%H-%M")
+    col_b1, col_b2 = st.columns(2)
 
-        st.download_button(
-            label="💾 Salvar Backup Manual",
-            data=dados_json,
-            file_name=f"backup_ace_{data_atual}.json",
-            mime="application/json",
+    with col_b1:
+        st.markdown("### 📤 Salvar Backup")
+        st.markdown("Baixe um arquivo de segurança com todas as suas vistorias.")
+        if st.session_state.vistorias:
+            dados_json = json.dumps(
+                st.session_state.vistorias, ensure_ascii=False, indent=4
+            )
+            data_atual = datetime.today().strftime("%Y-%m-%d_%H-%M")
+            st.download_button(
+                label="💾 Baixar Arquivo de Backup",
+                data=dados_json,
+                file_name=f"backup_ace_{data_atual}.json",
+                mime="application/json",
+            )
+        else:
+            st.info("⚠️ Nenhum dado cadastrado para exportar.")
+
+    with col_b2:
+        st.markdown("### 📥 Restaurar / Puxar Backup")
+        st.markdown(
+            "Selecione um arquivo de backup (`.json`) salvo anteriormente no seu celular."
         )
-        st.success(
-            "💡 Dica: Após salvar o arquivo de backup, guarde-o no seu Google Drive ou envie para você mesmo no WhatsApp!"
+        arquivo_submetido = st.file_uploader(
+            "Carregar arquivo de backup", type=["json"]
         )
-    else:
-        st.info(
-            "⚠️ Não há dados cadastrados ainda para gerar o backup de segurança."
-        )
+
+        if arquivo_submetido is not None:
+            try:
+                dados_carregados = json.load(arquivo_submetido)
+                if isinstance(dados_carregados, list):
+                    st.session_state.vistorias = dados_carregados
+                    st.success(
+                        f"🎉 Sucesso! {len(dados_carregados)} registros carregados e restaurados com sucesso!"
+                    )
+                    st.rerun()
+                else:
+                    st.error(
+                        "⚠️ O arquivo selecionado não está no formato correto."
+                    )
+            except Exception as e:
+                st.error(f"Erro ao ler o arquivo: {e}")

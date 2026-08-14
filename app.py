@@ -1,4 +1,3 @@
-%%writefile app.py
 from datetime import datetime
 import pandas as pd
 import streamlit as st
@@ -175,4 +174,3 @@ if st.session_state.vistorias:
         file_name=f"vistorias_ace_{datetime.today().strftime('%Y-%m-%d')}.csv",
         mime="text/csv",
     )
-

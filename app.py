@@ -66,7 +66,7 @@ st.markdown(
     """
     <div style="padding: 15px 0; border-bottom: 2px solid #F1F5F9; margin-bottom: 25px;">
         <h1 style="margin:0; font-size: 32px;">🏡 Gestão de Campo - ACE</h1>
-        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema inteligente de registro, controle de imóveis fechados e backup de segurança.</p>
+        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema inteligente de registro, filtros avançados de campo e inteligência de busca cruzada.</p>
     </div>
 """,
     unsafe_allow_html=True,
@@ -74,7 +74,11 @@ st.markdown(
 
 # Abas do Aplicativo
 aba_cadastro, aba_busca, aba_backup = st.tabs(
-    ["📝 Registrar Visita", "🔍 Gerenciamento e Fechadas", "💾 Central de Backup"]
+    [
+        "📝 Registrar Visita",
+        "🔍 Busca Avançada & Cruzada",
+        "💾 Central de Backup",
+    ]
 )
 
 with aba_cadastro:
@@ -163,7 +167,7 @@ with aba_cadastro:
                     "Data": data_visita.strftime("%d/%m/%Y"),
                     "Quarteirao": str(quarteirao).strip(),
                     "Lado": lado,
-                    "Rua": rua,
+                    "Rua": str(rua).strip().title(),
                     "Numero": str(numero_imovel).strip(),
                     "Tipo Imovel": tipo_imovel,
                     "Hora": hora_entrada.strftime("%H:%M"),
@@ -187,9 +191,11 @@ with aba_cadastro:
         )
 
 with aba_busca:
-    st.subheader("🔍 Gerenciamento Inteligente de Imóveis Fechados")
+    st.subheader(
+        "🔍 Gerenciamento Avançado, Filtros e Inteligência de Cruzamento"
+    )
     st.markdown(
-        "Filtre por quarteirão para identificar quais casas continuam pendentes e quais já foram recuperadas, evitando duplicidade."
+        "Filtre por **Quarteirão**, **Rua** e **Data**, ou utilize a inteligência de busca cruzada para mapear imóveis fechados e evitar duplicidades."
     )
 
     if not st.session_state.vistorias:
@@ -197,18 +203,30 @@ with aba_busca:
     else:
         df_busca = pd.DataFrame(st.session_state.vistorias)
 
-        col_f1, col_f2 = st.columns(2)
+        # Filtros novos (Data, Quarteirão, Rua e Status)
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+
         with col_f1:
             quart_unicos = sorted(df_busca["Quarteirao"].unique().tolist())
             filtro_quarteirao = st.selectbox(
-                "Filtrar por Quarteirão", ["Todos"] + quart_unicos
+                "Quarteirão", ["Todos"] + quart_unicos
             )
+
         with col_f2:
+            ruas_unicas = sorted(df_busca["Rua"].unique().tolist())
+            filtro_rua = st.selectbox("Rua", ["Todas"] + ruas_unicas)
+
+        with col_f3:
+            datas_unicas = sorted(df_busca["Data"].unique().tolist())
+            filtro_data = st.selectbox("Data da Visita", ["Todas"] + datas_unicas)
+
+        with col_f4:
             filtro_status = st.selectbox(
-                "Filtrar por Status de Visita",
+                "Status",
                 ["Todos", "Apenas Fechadas Pendentes", "Recuperadas", "Normal"],
             )
 
+        # Chave única para cruzamento de imóveis
         df_busca["Chave_Imovel"] = (
             df_busca["Quarteirao"]
             + " - "
@@ -217,11 +235,16 @@ with aba_busca:
             + df_busca["Numero"]
         )
 
+        # Aplicando filtros
         df_filtrado = df_busca.copy()
         if filtro_quarteirao != "Todos":
             df_filtrado = df_filtrado[
                 df_filtrado["Quarteirao"] == filtro_quarteirao
             ]
+        if filtro_rua != "Todas":
+            df_filtrado = df_filtrado[df_filtrado["Rua"] == filtro_rua]
+        if filtro_data != "Todas":
+            df_filtrado = df_filtrado[df_filtrado["Data"] == filtro_data]
 
         if filtro_status == "Apenas Fechadas Pendentes":
             imoveis_recuperados = set(
@@ -238,7 +261,7 @@ with aba_busca:
 
         st.write("---")
         st.markdown(
-            f"### 📋 Resultados Encontrados ({len(df_filtrado)} registros)"
+            f"### 📋 Lista Filtrada de Imóveis ({len(df_filtrado)} registros)"
         )
 
         if not df_filtrado.empty:
@@ -257,7 +280,47 @@ with aba_busca:
                 use_container_width=True,
             )
         else:
-            st.success("🎉 Nenhum imóvel pendente com esses critérios!")
+            st.success(
+                "🎉 Nenhum imóvel encontrado com estes filtros específicos!"
+            )
+
+        # RECURSO SURPRESA: Busca Cruzada e Matriz de Alerta de Pendências Críticas
+        st.write("---")
+        st.subheader("⚡ Mecanismo de Inteligência: Painel de Alerta de Fechadas")
+        st.markdown(
+            "Este painel cruza automaticamente todo o seu histórico para mostrar apenas os **imóveis que continuam fechados**, agrupados por quarteirão, para você planejar seu retorno imediato:"
+        )
+
+        # Isolar apenas casas fechadas sem recuperação posterior
+        imoveis_recuperados_geral = set(
+            df_busca[df_busca["Visita"] == "Recuperada"]["Chave_Imovel"]
+        )
+        df_pendentes = df_busca[
+            (df_busca["Visita"] == "Fechada")
+            & (~df_busca["Chave_Imovel"].isin(imoveis_recuperados_geral))
+        ]
+
+        if not df_pendentes.empty:
+            st.warning(
+                f"⚠️ Atenção ACE: Existem atualmente **{len(df_pendentes)} imóveis fechados pendentes** aguardando recuperação."
+            )
+            st.dataframe(
+                df_pendentes[
+                    [
+                        "Data",
+                        "Quarteirao",
+                        "Lado",
+                        "Rua",
+                        "Numero",
+                        "Tipo Imovel",
+                    ]
+                ],
+                use_container_width=True,
+            )
+        else:
+            st.success(
+                "✨ Excelente trabalho! Não há imóveis fechados pendentes em nenhum quarteirão no momento."
+            )
 
 with aba_backup:
     st.subheader("🔒 Central de Segurança e Backup Manual")
@@ -266,7 +329,6 @@ with aba_backup:
     )
 
     if st.session_state.vistorias:
-        # Transformar os dados salvos em formato JSON para backup
         dados_json = json.dumps(
             st.session_state.vistorias, ensure_ascii=False, indent=4
         )
@@ -279,7 +341,7 @@ with aba_backup:
             mime="application/json",
         )
         st.success(
-            "💡 Dica: Após salvar o arquivo de backup, você pode guardá-lo no seu Google Drive ou enviá-lo para você mesmo no WhatsApp!"
+            "💡 Dica: Após salvar o arquivo de backup, guarde-o no seu Google Drive ou envie para você mesmo no WhatsApp!"
         )
     else:
         st.info(

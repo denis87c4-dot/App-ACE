@@ -66,17 +66,17 @@ st.markdown(
     """
     <div style="padding: 15px 0; border-bottom: 2px solid #F1F5F9; margin-bottom: 25px;">
         <h1 style="margin:0; font-size: 32px;">🏡 Gestão de Campo - ACE</h1>
-        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema inteligente de registro, filtros avançados de campo e inteligência de busca cruzada.</p>
+        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema completo de registro, filtros avançados, histórico duplo e backup de segurança.</p>
     </div>
 """,
     unsafe_allow_html=True,
 )
 
-# Abas do Aplicativo
+# Abas principais do sistema
 aba_cadastro, aba_busca, aba_backup = st.tabs(
     [
         "📝 Registrar Visita",
-        "🔍 Busca Avançada & Cruzada",
+        "🔍 Busca Avançada & Recuperação",
         "💾 Central de Backup",
     ]
 )
@@ -84,10 +84,20 @@ aba_cadastro, aba_busca, aba_backup = st.tabs(
 with aba_cadastro:
     col_m1, col_m2, col_m3 = st.columns(3)
     total_visitas = len(st.session_state.vistorias)
-    fechadas_count = sum(
+
+    # Identificar chaves únicas já recuperadas para calcular as fechadas pendentes reais
+    imoveis_recuperados_geral = set()
+    for v in st.session_state.vistorias:
+        if v.get("Visita") == "Recuperada":
+            chave = f"{v.get('Quarteirao')} - {v.get('Rua')} - N° {v.get('Numero')}"
+            imoveis_recuperados_geral.add(chave)
+
+    fechadas_pendentes_count = sum(
         1
         for v in st.session_state.vistorias
         if v.get("Visita") == "Fechada"
+        and f"{v.get('Quarteirao')} - {v.get('Rua')} - N° {v.get('Numero')}"
+        not in imoveis_recuperados_geral
     )
 
     with col_m1:
@@ -105,8 +115,8 @@ with aba_cadastro:
         st.markdown(
             f"""
             <div class="metric-card">
-                <h3>Imóveis Fechados</h3>
-                <p style="color: #DC2626;">{fechadas_count}</p>
+                <h3>Fechadas Pendentes</h3>
+                <p style="color: #DC2626;">{fechadas_pendentes_count}</p>
             </div>
         """,
             unsafe_allow_html=True,
@@ -191,11 +201,9 @@ with aba_cadastro:
         )
 
 with aba_busca:
-    st.subheader(
-        "🔍 Gerenciamento Avançado, Filtros e Inteligência de Cruzamento"
-    )
+    st.subheader("🔍 Gerenciamento Avançado & Painel de Recuperação")
     st.markdown(
-        "Filtre por **Quarteirão**, **Rua** e **Data**, ou utilize a inteligência de busca cruzada para mapear imóveis fechados e evitar duplicidades."
+        "Filtre os dados ou utilize o painel interativo abaixo. Ao marcar uma casa fechada como recuperada, **o histórico original da fechada permanece salvo**, e um novo registro oficial de recuperação é gerado automaticamente!"
     )
 
     if not st.session_state.vistorias:
@@ -203,30 +211,27 @@ with aba_busca:
     else:
         df_busca = pd.DataFrame(st.session_state.vistorias)
 
-        # Filtros novos (Data, Quarteirão, Rua e Status)
         col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-
         with col_f1:
             quart_unicos = sorted(df_busca["Quarteirao"].unique().tolist())
             filtro_quarteirao = st.selectbox(
-                "Quarteirão", ["Todos"] + quart_unicos
+                "Quarteirão", ["Todos"] + quart_unicos, key="f_quart"
             )
-
         with col_f2:
             ruas_unicas = sorted(df_busca["Rua"].unique().tolist())
-            filtro_rua = st.selectbox("Rua", ["Todas"] + ruas_unicas)
-
+            filtro_rua = st.selectbox("Rua", ["Todas"] + ruas_unicas, key="f_rua")
         with col_f3:
             datas_unicas = sorted(df_busca["Data"].unique().tolist())
-            filtro_data = st.selectbox("Data da Visita", ["Todas"] + datas_unicas)
-
+            filtro_data = st.selectbox(
+                "Data da Visita", ["Todas"] + datas_unicas, key="f_data"
+            )
         with col_f4:
             filtro_status = st.selectbox(
                 "Status",
                 ["Todos", "Apenas Fechadas Pendentes", "Recuperadas", "Normal"],
+                key="f_status",
             )
 
-        # Chave única para cruzamento de imóveis
         df_busca["Chave_Imovel"] = (
             df_busca["Quarteirao"]
             + " - "
@@ -235,7 +240,6 @@ with aba_busca:
             + df_busca["Numero"]
         )
 
-        # Aplicando filtros
         df_filtrado = df_busca.copy()
         if filtro_quarteirao != "Todos":
             df_filtrado = df_filtrado[
@@ -246,13 +250,14 @@ with aba_busca:
         if filtro_data != "Todas":
             df_filtrado = df_filtrado[df_filtrado["Data"] == filtro_data]
 
+        imoveis_recuperados_set = set(
+            df_busca[df_busca["Visita"] == "Recuperada"]["Chave_Imovel"]
+        )
+
         if filtro_status == "Apenas Fechadas Pendentes":
-            imoveis_recuperados = set(
-                df_busca[df_busca["Visita"] == "Recuperada"]["Chave_Imovel"]
-            )
             df_filtrado = df_filtrado[
                 (df_filtrado["Visita"] == "Fechada")
-                & (~df_filtrado["Chave_Imovel"].isin(imoveis_recuperados))
+                & (~df_filtrado["Chave_Imovel"].isin(imoveis_recuperados_set))
             ]
         elif filtro_status == "Recuperadas":
             df_filtrado = df_filtrado[df_filtrado["Visita"] == "Recuperada"]
@@ -261,9 +266,8 @@ with aba_busca:
 
         st.write("---")
         st.markdown(
-            f"### 📋 Lista Filtrada de Imóveis ({len(df_filtrado)} registros)"
+            f"### 📋 Lista Filtrada ({len(df_filtrado)} registros)"
         )
-
         if not df_filtrado.empty:
             st.dataframe(
                 df_filtrado[
@@ -280,52 +284,56 @@ with aba_busca:
                 use_container_width=True,
             )
         else:
-            st.success(
-                "🎉 Nenhum imóvel encontrado com estes filtros específicos!"
-            )
+            st.success("🎉 Nenhum imóvel encontrado com estes filtros!")
 
-        # RECURSO SURPRESA: Busca Cruzada e Matriz de Alerta de Pendências Críticas
+        # PAINEL INTERATIVO COM HISTÓRICO DUPLO (MANTÉM FECHADA + CRIA RECUPERADA)
         st.write("---")
-        st.subheader("⚡ Mecanismo de Inteligência: Painel de Alerta de Fechadas")
+        st.subheader("⚡ Painel de Conversão: Registrar Recuperação")
         st.markdown(
-            "Este painel cruza automaticamente todo o seu histórico para mostrar apenas os **imóveis que continuam fechados**, agrupados por quarteirão, para você planejar seu retorno imediato:"
+            "Marque a caixa ao lado da casa fechada que você visitou. O app manterá o histórico original da fechada e adicionará um novo registro de recuperada."
         )
 
-        # Isolar apenas casas fechadas sem recuperação posterior
-        imoveis_recuperados_geral = set(
-            df_busca[df_busca["Visita"] == "Recuperada"]["Chave_Imovel"]
-        )
-        df_pendentes = df_busca[
+        df_pendentes_painel = df_busca[
             (df_busca["Visita"] == "Fechada")
-            & (~df_busca["Chave_Imovel"].isin(imoveis_recuperados_geral))
+            & (~df_busca["Chave_Imovel"].isin(imoveis_recuperados_set))
         ]
 
-        if not df_pendentes.empty:
-            st.warning(
-                f"⚠️ Atenção ACE: Existem atualmente **{len(df_pendentes)} imóveis fechados pendentes** aguardando recuperação."
-            )
-            st.dataframe(
-                df_pendentes[
-                    [
-                        "Data",
-                        "Quarteirao",
-                        "Lado",
-                        "Rua",
-                        "Numero",
-                        "Tipo Imovel",
-                    ]
-                ],
-                use_container_width=True,
-            )
+        if not df_pendentes_painel.empty:
+            for idx, row in df_pendentes_painel.iterrows():
+                col_info, col_check = st.columns([4, 1])
+                with col_info:
+                    st.markdown(
+                        f"**Q:** {row['Quarteirao']} | **Rua:** {row['Rua']}, **N° {row['Numero']}** (Fechada em: {row['Data']})"
+                    )
+                with col_check:
+                    if st.checkbox("Recuperar", key=f"rec_{idx}"):
+                        # Cria um NOVO registro de Recuperada mantendo o antigo de Fechada no histórico
+                        novo_registro_recuperado = {
+                            "Data": datetime.today().strftime("%d/%m/%Y"),
+                            "Quarteirao": row["Quarteirao"],
+                            "Lado": row.get("Lado", ""),
+                            "Rua": row["Rua"],
+                            "Numero": row["Numero"],
+                            "Tipo Imovel": row["Tipo Imovel"],
+                            "Hora": datetime.now().strftime("%H:%M"),
+                            "Visita": "Recuperada",
+                        }
+                        st.session_state.vistorias.append(
+                            novo_registro_recuperado
+                        )
+                        st.success(
+                            "✅ Histórico de Fechada mantido + Recuperação registrada!"
+                        )
+                        st.rerun()
         else:
             st.success(
-                "✨ Excelente trabalho! Não há imóveis fechados pendentes em nenhum quarteirão no momento."
+                "✨ Perfeito! Não há imóveis fechados pendentes para recuperar."
             )
 
 with aba_backup:
     st.subheader("🔒 Central de Segurança e Backup Manual")
     st.markdown(
-        "Proteja seus dados! Clique no botão abaixo para baixar um arquivo de segurança com todas as suas vistorias diretamente para o seu celular."
+        "Proteja seus dados! Clique no botão abaixo para baixar um arquivo de segurança com todo o seu histórico completo diretamente para o seu celular."
     )
 
     if st.session_state.vistorias:

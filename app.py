@@ -16,12 +16,13 @@ if "reconhecimento" not in st.session_state:
     st.session_state.reconhecimento = []
 
 # ==================== ABAS PRINCIPAIS ====================
-aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(
+aba_cadastro, aba_reconhecimento, aba_fechadas, aba_busca, aba_backup = st.tabs(
     [
         "📝 Relatório Diário",
-        "🔍 Busca Avançada & Recuperação",
+        "📊 Reconhecimento",
+        "🚪 Casas Fechadas / Recusa",
+        "🔍 Busca & Auditoria",
         "💾 Central de Backup",
-        "📊 Reconhecimento & Auditoria",
     ]
 )
 
@@ -36,15 +37,11 @@ with aba_cadastro:
         with col1:
             data_visita = st.date_input("Data da Visita", value=datetime.today())
             num_quarteirao = st.text_input("Nº do Quarteirão", placeholder="Ex: 142B")
-            # CORRIGIDO: Lado do quarteirão apenas com números inteiros
             lado = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1, help="Digite apenas o número do lado (Ex: 1, 2, 3...)")
             
         with col2:
             nome_rua = st.text_input("Nome da Rua / Logradouro")
-            # Suporta alfanuméricos, barras e traços (ex: 2/1, 3A/5, Lote 12)
             num_casa = st.text_input("Nº / Identificação do Imóvel", placeholder="Ex: 3A/5, 2/1")
-            
-            # Dropdown de Tipos de Imóvel comuns em endemias
             tipo_imovel = st.selectbox(
                 "Tipo de Imóvel", 
                 ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"]
@@ -121,34 +118,10 @@ with aba_cadastro:
                 st.session_state.vistorias = []
                 st.rerun()
 
-# ==================== ABA 2: BUSCA AVANÇADA ====================
-with aba_busca:
-    st.subheader("🔍 Busca Avançada e Filtros Globais")
-    
-    if st.session_state.reconhecimento or st.session_state.vistorias:
-        base_escolhida = st.selectbox("Escolha a base para buscar", ["Relatório Diário (Vistorias)", "Reconhecimento"])
-        
-        df_base = pd.DataFrame(st.session_state.vistorias) if "Diário" in base_escolhida else pd.DataFrame(st.session_state.reconhecimento)
-        
-        if not df_base.empty:
-            termo = st.text_input("🔍 Digite qualquer termo para buscar na base escolhida:", placeholder="Ex: Rua das Flores, 142, Normal...")
-            if termo:
-                mask = df_base.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
-                df_resultado = df_base[mask]
-            else:
-                df_resultado = df_base
-                
-            st.info(f"Mostrando {len(df_resultado)} registros encontrados.")
-            st.dataframe(df_resultado, use_container_width=True)
-        else:
-            st.info("Nenhum dado disponível nesta base.")
-    else:
-        st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
-
-# ==================== ABA 4: RECONHECIMENTO & AUDITORIA ====================
+# ==================== ABA 2: RECONHECIMENTO ====================
 with aba_reconhecimento:
-    st.subheader("📊 Reconhecimento de Imóveis & Integração com Vistorias")
-    st.markdown("Cadastre a quantidade de imóveis por categoria em cada quarteirão e cruze com o relatório diário.")
+    st.subheader("📊 Reconhecimento de Imóveis & Integração")
+    st.markdown("Cadastre a quantidade de imóveis por categoria em cada quarteirão.")
 
     with st.form("form_reconhecimento", clear_on_submit=True):
         col_r1, col_r2 = st.columns(2)
@@ -211,38 +184,98 @@ with aba_reconhecimento:
             st.info("ℹ️ Cadastre dados no 'Relatório Diário' para habilitar o cruzamento automático por quarteirão.")
             st.dataframe(df_recon, use_container_width=True)
 
-        # Auditoria comparativa por mês com ordenação cronológica rigorosa
-        st.write("---")
-        st.subheader("📈 Auditoria Comparativa Mensal por Quarteirão")
-        df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
-        df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
+# ==================== ABA 3: CASAS FECHADAS / RECUSA ====================
+with aba_fechadas:
+    st.subheader("🚪 Monitoramento de Imóveis Fechados e Recusas")
+    st.markdown("Lista automatizada de endereços que exigem retorno ou ação de recuperação com base no Relatório Diário.")
 
-        df_audit = df_recon.groupby(["AnoMes", "Quarteirao"]).agg({
-            "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total": "sum"
-        }).reset_index()
+    if st.session_state.vistorias:
+        df_vistorias = pd.DataFrame(st.session_state.vistorias)
+        # Filtra apenas os registros marcados como Fechada / Recusa
+        df_fechadas = df_vistorias[df_vistorias["Vistoria"] == "Fechada / Recusa"]
 
-        df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
-        df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
+        if not df_fechadas.empty:
+            st.warning(f"⚠️ Foram encontrados **{len(df_fechadas)}** imóveis fechados ou com recusa pendentes de recuperação.")
+            
+            # Filtro opcional por quarteirão
+            quart_filtro = st.selectbox("Filtrar por Quarteirão (Opcional)", ["Todos"] + list(df_fechadas["Quarteirao"].unique()))
+            if quart_filtro != "Todos":
+                df_fechadas = df_fechadas[df_fechadas["Quarteirao"] == quart_filtro]
 
-        st.dataframe(df_audit, use_container_width=True)
+            st.dataframe(
+                df_fechadas[["Data", "Quarteirao", "Lado", "Rua", "Casa", "Tipo Imovel", "Agente"]], 
+                use_container_width=True
+            )
+            
+            # Opção de exportar apenas a lista de pendências para facilitar o trabalho de campo
+            csv_fechadas = df_fechadas.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="📥 Baixar Lista de Pendências (CSV)",
+                data=csv_fechadas,
+                file_name=f"imoveis_fechados_{datetime.today().strftime('%Y-%m-%d')}.csv",
+                mime="text/csv",
+            )
+        else:
+            st.success("🎉 Nenhum imóvel registrado como 'Fechada / Recusa' no momento!")
+    else:
+        st.info("ℹ️ Preencha o Relatório Diário para monitorar imóveis fechados e recusas.")
 
-        # Gráfico analítico
-        st.write("---")
-        quarteiroes_disponiveis = df_audit["Quarteirao"].unique()
-        quart_sel = st.selectbox("Selecione o Quarteirão para Auditoria Gráfica", quarteiroes_disponiveis)
-        df_quart_audit = df_audit[df_audit["Quarteirao"] == quart_sel].sort_values("AnoMes")
+# ==================== ABA 4: BUSCA & AUDITORIA ====================
+with aba_busca:
+    st.subheader("🔍 Busca Avançada e Auditoria Comparativa")
+    
+    if st.session_state.reconhecimento or st.session_state.vistorias:
+        base_escolhida = st.selectbox("Escolha a base para buscar", ["Relatório Diário (Vistorias)", "Reconhecimento"])
+        
+        df_base = pd.DataFrame(st.session_state.vistorias) if "Diário" in base_escolhida else pd.DataFrame(st.session_state.reconhecimento)
+        
+        if not df_base.empty:
+            termo = st.text_input("🔍 Digite qualquer termo para buscar na base escolhida:", placeholder="Ex: Rua das Flores, 142, Normal...")
+            if termo:
+                mask = df_base.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
+                df_resultado = df_base[mask]
+            else:
+                df_resultado = df_base
+                
+            st.info(f"Mostrando {len(df_resultado)} registros encontrados.")
+            st.dataframe(df_resultado, use_container_width=True)
+        else:
+            st.info("Nenhum dado disponível nesta base.")
 
-        chart_audit = alt.Chart(
-            df_quart_audit.melt(id_vars=["AnoMes"], value_vars=["Residencias","Outros","TB","Comercio","Total"], var_name="Categoria", value_name="Valor")
-        ).mark_line(point=True).encode(
-            x="AnoMes",
-            y="Valor",
-            color="Categoria",
-            tooltip=["AnoMes","Categoria","Valor"]
-        ).properties(height=400, title=f"Evolução do Quarteirão {quart_sel}")
-        st.altair_chart(chart_audit, use_container_width=True)
+        # Auditoria mensal e gráficos caso haja reconhecimento
+        if st.session_state.reconhecimento:
+            st.write("---")
+            st.subheader("📈 Auditoria Comparativa Mensal por Quarteirão")
+            df_recon_aud = pd.DataFrame(st.session_state.reconhecimento)
+            df_recon_aud["Data"] = pd.to_datetime(df_recon_aud["Data Registro"], format="%d/%m/%Y")
+            df_recon_aud["AnoMes"] = df_recon_aud["Data"].dt.to_period("M").astype(str)
 
-# ==================== ABA 3: BACKUP ROBUSTO EM ZIP ====================
+            df_audit = df_recon_aud.groupby(["AnoMes", "Quarteirao"]).agg({
+                "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total": "sum"
+            }).reset_index()
+
+            df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
+            df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
+
+            st.dataframe(df_audit, use_container_width=True)
+
+            quarteiroes_disponiveis = df_audit["Quarteirao"].unique()
+            quart_sel = st.selectbox("Selecione o Quarteirão para Auditoria Gráfica", quarteiroes_disponiveis)
+            df_quart_audit = df_audit[df_audit["Quarteirao"] == quart_sel].sort_values("AnoMes")
+
+            chart_audit = alt.Chart(
+                df_quart_audit.melt(id_vars=["AnoMes"], value_vars=["Residencias","Outros","TB","Comercio","Total"], var_name="Categoria", value_name="Valor")
+            ).mark_line(point=True).encode(
+                x="AnoMes",
+                y="Valor",
+                color="Categoria",
+                tooltip=["AnoMes","Categoria","Valor"]
+            ).properties(height=400, title=f"Evolução do Quarteirão {quart_sel}")
+            st.altair_chart(chart_audit, use_container_width=True)
+    else:
+        st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
+
+# ==================== ABA 5: CENTRAL DE BACKUP ====================
 with aba_backup:
     st.subheader("🔐 Central de Segurança e Backup Avançado")
 

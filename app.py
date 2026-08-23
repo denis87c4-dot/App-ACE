@@ -1,5 +1,8 @@
 import io, zipfile, os
 import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
+from datetime import datetime
 
 # ==================== ABAS PRINCIPAIS ====================
 aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(

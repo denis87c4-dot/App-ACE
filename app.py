@@ -4,6 +4,17 @@ import altair as alt
 from datetime import datetime
 import io, zipfile, os
 
+# ==================== CONFIGURAÇÃO DA PÁGINA ====================
+st.set_page_config(page_title="Sistema ACE - Gestão de Imóveis", layout="wide")
+
+st.title("🛡️ Sistema de Controle de Endemias (ACE)")
+
+# Inicialização de estados globais
+if "vistorias" not in st.session_state:
+    st.session_state.vistorias = []
+if "reconhecimento" not in st.session_state:
+    st.session_state.reconhecimento = []
+
 # ==================== ABAS PRINCIPAIS ====================
 aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(
     [
@@ -14,13 +25,62 @@ aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(
     ]
 )
 
-# ==================== ABA RECONHECIMENTO ====================
+# ==================== ABA 1: REGISTRAR VISITA (Exemplo Básico) ====================
+with aba_cadastro:
+    st.subheader("📝 Cadastro de Vistorias de Imóveis")
+    with st.form("form_vistoria", clear_on_submit=True):
+        col_v1, col_v2 = st.columns(2)
+        with col_v1:
+            imovel_id = st.text_input("Identificação do Imóvel / Endereço")
+        with col_v2:
+            status_imovel = st.selectbox("Situação", ["Normal", "Recusado", "Fechado", "Com Foco"])
+        
+        submitted_vistoria = st.form_submit_button("💾 Salvar Vistoria")
+        if submitted_vistoria:
+            if imovel_id:
+                st.session_state.vistorias.append({
+                    "Imovel": imovel_id,
+                    "Status": status_imovel,
+                    "Data": datetime.today().strftime("%d/%m/%Y")
+                })
+                st.success("✅ Vistoria registrada com sucesso!")
+            else:
+                st.warning("⚠️ Informe a identificação do imóvel.")
+
+    if st.session_state.vistorias:
+        st.write("---")
+        st.subheader("📋 Vistorias Recentes")
+        st.dataframe(pd.DataFrame(st.session_state.vistorias), use_container_width=True)
+
+# ==================== ABA 2: BUSCA AVANÇADA ====================
+with aba_busca:
+    st.subheader("🔍 Busca Avançada e Filtros Globais")
+    
+    # Unificando dados para busca se houver
+    if st.session_state.reconhecimento or st.session_state.vistorias:
+        aba_escolha = st.selectbox("Escolha a base para buscar", ["Reconhecimento", "Vistorias"])
+        
+        df_base = pd.DataFrame(st.session_state.reconhecimento) if aba_escolha == "Reconhecimento" else pd.DataFrame(st.session_state.vistorias)
+        
+        if not df_base.empty:
+            termo = st.text_input("🔍 Digite qualquer termo para buscar na base:", placeholder="Ex: Nome do auditor, número do quarteirão...")
+            if termo:
+                mask = df_base.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
+                df_resultado = df_base[mask]
+            else:
+                df_resultado = df_base
+                
+            st.info(f"Mostrando {len(df_resultado)} registros encontrados.")
+            st.dataframe(df_resultado, use_container_width=True)
+        else:
+            st.info("Nenhum dado disponível nesta base.")
+    else:
+        st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
+
+# ==================== ABA 4: RECONHECIMENTO (Com Correção de Ordenação e Variação) ====================
 with aba_reconhecimento:
     st.subheader("📊 Reconhecimento de Imóveis por Quarteirão")
     st.markdown("Cadastre a quantidade de imóveis por categoria em cada quarteirão, com data e auditoria.")
-
-    if "reconhecimento" not in st.session_state:
-        st.session_state.reconhecimento = []
 
     with st.form("form_reconhecimento", clear_on_submit=True):
         col_r1, col_r2 = st.columns(2)
@@ -67,12 +127,13 @@ with aba_reconhecimento:
         df_recon = pd.DataFrame(st.session_state.reconhecimento)
         st.dataframe(df_recon, use_container_width=True)
 
-        # Auditoria comparativa por mês
+        # Auditoria comparativa por mês com ORDENAÇÃO CRONOLÓGICA rigorosa
         st.write("---")
         st.subheader("📈 Auditoria Comparativa por Mês")
         df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
         df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
 
+        # Agrupamento inicial por mês e quarteirão
         df_audit = df_recon.groupby(["AnoMes", "Quarteirao"]).agg({
             "Residencias": "sum",
             "Outros": "sum",
@@ -81,22 +142,34 @@ with aba_reconhecimento:
             "Total": "sum"
         }).reset_index()
 
+        # ORDENAÇÃO CRONOLÓGICA CRUCIAL antes do cálculo de delta
+        df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
+
+        # Cálculo seguro de variação percentual por quarteirão ao longo do tempo
+        df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
+
         st.dataframe(df_audit, use_container_width=True)
 
-        # Seleção de quarteirão para auditoria
-        quart_sel = st.selectbox("Selecione o Quarteirão para Auditoria", df_audit["Quarteirao"].unique())
+        # Seleção de quarteirão para auditoria detalhada
+        st.write("---")
+        quarteiroes_disponiveis = df_audit["Quarteirao"].unique()
+        quart_sel = st.selectbox("Selecione o Quarteirão para Auditoria", quarteiroes_disponiveis)
         df_quart_audit = df_audit[df_audit["Quarteirao"] == quart_sel].sort_values("AnoMes")
 
         # Detectar variações críticas
-        st.write("---")
         st.subheader("🚨 Variações Críticas")
-        df_quart_audit["Delta_Total"] = df_quart_audit["Total"].pct_change() * 100
+        tem_variacao = False
         for idx, row in df_quart_audit.iterrows():
-            if not pd.isna(row["Delta_Total"]):
-                if row["Delta_Total"] > 20:
-                    st.markdown(f"<span style='color:green; font-weight:bold;'>⬆️ Crescimento de {row['Delta_Total']:.1f}% em {row['AnoMes']}</span>", unsafe_allow_html=True)
-                elif row["Delta_Total"] < -20:
-                    st.markdown(f"<span style='color:red; font-weight:bold;'>⬇️ Queda de {row['Delta_Total']:.1f}% em {row['AnoMes']}</span>", unsafe_allow_html=True)
+            delta = row["Delta_Total"]
+            if not pd.isna(delta):
+                tem_variacao = True
+                if delta > 20:
+                    st.markdown(f"<span style='color:green; font-weight:bold;'>⬆️ Crescimento de {delta:.1f}% em {row['AnoMes']}</span>", unsafe_allow_html=True)
+                elif delta < -20:
+                    st.markdown(f"<span style='color:red; font-weight:bold;'>⬇️ Queda de {delta:.1f}% em {row['AnoMes']}</span>", unsafe_allow_html=True)
+        
+        if not tem_variacao:
+            st.info("Ainda não há dados históricos suficientes (múltiplos meses) para calcular variações neste quarteirão.")
 
         # Gráfico de evolução por quarteirão
         chart_audit = alt.Chart(
@@ -109,7 +182,7 @@ with aba_reconhecimento:
         ).properties(height=400, title=f"Evolução do Quarteirão {quart_sel}")
         st.altair_chart(chart_audit, use_container_width=True)
 
-# ==================== BACKUP ROBUSTO EM ZIP ====================
+# ==================== ABA 3: BACKUP ROBUSTO EM ZIP ====================
 with aba_backup:
     st.subheader("🔐 Central de Segurança e Backup Avançado")
 
@@ -125,7 +198,7 @@ with aba_backup:
                 df_recon = pd.DataFrame(st.session_state.reconhecimento)
                 df_recon.to_csv(ARQUIVO_RECONHECIMENTO, index=False)
 
-                # Gerar relatório de auditoria
+                # Gerar relatório de auditoria ordenado
                 df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
                 df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
                 df_audit = df_recon.groupby(["AnoMes", "Quarteirao"]).agg({
@@ -135,10 +208,11 @@ with aba_backup:
                     "Comercio": "sum",
                     "Total": "sum"
                 }).reset_index()
+                df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
                 df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
                 df_audit.to_csv(ARQUIVO_AUDITORIA, index=False)
-        except:
-            pass
+        except Exception as e:
+            print(f"Erro no backup automático: {e}")
 
     salvar_backup_automatico()
 
@@ -160,7 +234,7 @@ with aba_backup:
                 file_name=f"backup_ace_{datetime.today().strftime('%Y-%m-%d')}.zip",
                 mime="application/zip",
             )
-            # Botão extra para baixar auditoria separada
+            
             if os.path.exists(ARQUIVO_AUDITORIA):
                 st.download_button(
                     label="📥 Baixar Relatório de Auditoria (CSV)",
@@ -178,4 +252,17 @@ with aba_backup:
             try:
                 with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
                     zip_ref.extractall(".")
+                
+                # Restaurar vistorias
                 if os.path.exists(ARQUIVO_VISTORIAS):
+                    df_v = pd.read_csv(ARQUIVO_VISTORIAS)
+                    st.session_state.vistorias = df_v.to_dict("records")
+                
+                # Restaurar reconhecimento
+                if os.path.exists(ARQUIVO_RECONHECIMENTO):
+                    df_r = pd.read_csv(ARQUIVO_RECONHECIMENTO)
+                    st.session_state.reconhecimento = df_r.to_dict("records")
+                    
+                st.success("✅ Backup restaurado com sucesso! Atualize a página se necessário.")
+            except Exception as e:
+                st.error(f"❌ Erro ao restaurar o backup: {e}")

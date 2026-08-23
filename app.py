@@ -36,7 +36,8 @@ with aba_cadastro:
         with col1:
             data_visita = st.date_input("Data da Visita", value=datetime.today())
             num_quarteirao = st.text_input("Nº do Quarteirão", placeholder="Ex: 142B")
-            lado = st.selectbox("Lado", ["Ímpar", "Par", "Único", "A", "B", "C", "Norte", "Sul"])
+            # CORRIGIDO: Lado do quarteirão apenas com números inteiros
+            lado = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1, help="Digite apenas o número do lado (Ex: 1, 2, 3...)")
             
         with col2:
             nome_rua = st.text_input("Nome da Rua / Logradouro")
@@ -81,7 +82,7 @@ with aba_cadastro:
                 novo_registro = {
                     "Data": data_visita.strftime("%d/%m/%Y"),
                     "Quarteirao": str(num_quarteirao).strip(),
-                    "Lado": lado,
+                    "Lado": int(lado),
                     "Rua": nome_rua,
                     "Casa": str(num_casa), 
                     "Tipo Imovel": tipo_imovel,
@@ -97,7 +98,7 @@ with aba_cadastro:
                 }
                 
                 st.session_state.vistorias.append(novo_registro)
-                st.success(f"✅ Imóvel **{num_casa}** ({nome_rua}) registrado com sucesso!")
+                st.success(f"✅ Imóvel **{num_casa}** (Lado {lado}, {nome_rua}) registrado com sucesso!")
 
     # --- PAINEL DE RESUMO DO DIA ---
     if st.session_state.vistorias:
@@ -154,7 +155,7 @@ with aba_reconhecimento:
         with col_r1:
             quarteirao_rec = st.text_input("Número do Quarteirão", placeholder="Ex: 142")
         with col_r2:
-            lado_rec = st.text_input("Lado", placeholder="Ex: A ou Norte")
+            lado_rec = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1, key="lado_rec")
 
         col_d1, col_d2 = st.columns(2)
         with col_d1:
@@ -176,7 +177,7 @@ with aba_reconhecimento:
                 total = residencias + outros + tb + comercio
                 novo_reconhecimento = {
                     "Quarteirao": str(quarteirao_rec).strip(),
-                    "Lado": lado_rec,
+                    "Lado": int(lado_rec),
                     "Residencias": residencias,
                     "Outros": outros,
                     "TB": tb,

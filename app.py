@@ -177,4 +177,5 @@ with aba_backup:
         if arquivo_upload is not None:
             try:
                 with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
-                    zip_ref
+                    zip_ref.extractall(".")
+                if os

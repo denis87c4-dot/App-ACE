@@ -132,9 +132,36 @@ with aba_cadastro:
         }
 
         st.session_state.vistorias.append(novo_registro)
+        
+        # Reconhecimento automático dinâmico baseado no tipo de imóvel cadastrado
+        # Classifica de forma inteligente para alimentar as tabelas consolidadas
+        tipo_limpo = tipo_imovel.split(" ")[0]
+        res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+        if "Residência" in tipo_imovel:
+          res_val = 1
+        elif "Comércio" in tipo_imovel:
+          com_val = 1
+        elif "Terreno" in tipo_imovel:
+          tb_val = 1
+        else:
+          out_val = 1
+
+        registro_rec = {
+            "Quarteirao": str(num_quarteirao).strip(),
+            "Lado": int(lado),
+            "Residencias": res_val,
+            "Outros": out_val,
+            "TB": tb_val,
+            "Comercio": com_val,
+            "Total": 1,
+            "Data Registro": data_visita.strftime("%d/%m/%Y"),
+            "Auditor": agente_resp if agente_resp else "Geral",
+        }
+        st.session_state.reconhecimento.append(registro_rec)
+
         st.success(
-            f"✅ Imóvel **{num_casa}** (Lado {lado}, {nome_rua}) registrado com"
-            " sucesso!"
+            f"✅ Imóvel **{num_casa}** (Lado {lado}, {nome_rua}) registrado e"
+            " integrado com sucesso!"
         )
 
   # --- PAINEL DE RESUMO DO DIA ---
@@ -156,6 +183,7 @@ with aba_cadastro:
 
       if st.button("🗑️ Limpar Todos os Registros Diários"):
         st.session_state.vistorias = []
+        st.session_state.reconhecimento = []
         st.rerun()
 
 # ==================== ABA 2: BUSCA AVANÇADA ====================
@@ -165,7 +193,7 @@ with aba_busca:
   if st.session_state.reconhecimento or st.session_state.vistorias:
     base_escolhida = st.selectbox(
         "Escolha a base para buscar",
-        ["Relatório Diário (Vistorias)", "Reconhecimento"],
+        ["Relatório Diário (Vistorias)", "Reconhecimento Integrado"],
     )
 
     df_base = (
@@ -194,74 +222,35 @@ with aba_busca:
     else:
       st.info("Nenhum dado disponível nesta base.")
   else:
-    st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
+      st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
 
 # ==================== ABA 4: RECONHECIMENTO & AUDITORIA ====================
 with aba_reconhecimento:
-  st.subheader(
-      "📊 Reconhecimento de Imóveis & Integração com Vistorias"
-  )
+  st.subheader("📊 Painel de Reconhecimento Geográfico & Auditoria")
   st.markdown(
-      "Cadastre a quantidade de imóveis por categoria em cada quarteirão e"
-      " cruze com o relatório diário."
+      "Visualize o dimensionamento dos quarteirões consolidado a partir das"
+      " vistorias de campo e acompanhe a evolução analítica."
   )
-
-  with st.form("form_reconhecimento", clear_on_submit=True):
-    col_r1, col_r2 = st.columns(2)
-    with col_r1:
-      quarteirao_rec = st.text_input(
-          "Número do Quarteirão", placeholder="Ex: 142"
-      )
-    with col_r2:
-      lado_rec = st.number_input(
-          "Lado do Quarteirão", min_value=1, value=1, step=1, key="lado_rec"
-      )
-
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-      data_rec = st.date_input("Data do Reconhecimento", value=datetime.today())
-    with col_d2:
-      auditor = st.text_input("Responsável/Auditor", placeholder="Ex: Denison")
-
-    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
-    with col_c1:
-      residencias = st.number_input("Residências", min_value=0, step=1)
-    with col_c2:
-      outros = st.number_input("Outros", min_value=0, step=1)
-    with col_c3:
-      tb = st.number_input("TB", min_value=0, step=1)
-    with col_c4:
-      comercio = st.number_input("Comércio", min_value=0, step=1)
-
-    submitted_rec = st.form_submit_button("💾 Salvar Reconhecimento")
-    if submitted_rec:
-      if not quarteirao_rec:
-        st.warning("⚠️ Informe o número do quarteirão.")
-      else:
-        total = residencias + outros + tb + comercio
-        novo_reconhecimento = {
-            "Quarteirao": str(quarteirao_rec).strip(),
-            "Lado": int(lado_rec),
-            "Residencias": residencias,
-            "Outros": outros,
-            "TB": tb,
-            "Comercio": comercio,
-            "Total": total,
-            "Data Registro": data_rec.strftime("%d/%m/%Y"),
-            "Auditor": auditor,
-        }
-        st.session_state.reconhecimento.append(novo_reconhecimento)
-        st.success("✅ Reconhecimento cadastrado com sucesso!")
 
   if st.session_state.reconhecimento:
-    st.write("---")
-    st.subheader(
-        "📈 Cruzamento: Planejado (Reconhecimento) x Realizado (Diário)"
-    )
-
     df_recon = pd.DataFrame(st.session_state.reconhecimento)
+    
+    # Agrupamento consolidado por quarteirão
+    df_consolidado = df_recon.groupby("Quarteirao").agg({
+        "Residencias": "sum",
+        "Outros": "sum",
+        "TB": "sum",
+        "Comercio": "sum",
+        "Total": "sum"
+    }).reset_index()
+
+    st.markdown("### 🏘️ Consolidação de Imóveis por Quarteirão")
+    st.dataframe(df_consolidado, use_container_width=True)
 
     if st.session_state.vistorias:
+      st.write("---")
+      st.subheader("📈 Cruzamento: Planejado x Realizado por Quarteirão")
+      
       df_vist = pd.DataFrame(st.session_state.vistorias)
       df_vist_resumo = (
           df_vist.pivot_table(
@@ -275,20 +264,14 @@ with aba_reconhecimento:
       )
 
       df_integrado = pd.merge(
-          df_recon, df_vist_resumo, on="Quarteirao", how="left"
+          df_consolidado, df_vist_resumo, on="Quarteirao", how="left"
       ).fillna(0)
       st.dataframe(df_integrado, use_container_width=True)
-    else:
-      st.info(
-          "ℹ️ Cadastre dados no 'Relatório Diário' para habilitar o cruzamento"
-          " automático por quarteirão."
-      )
-      st.dataframe(df_recon, use_container_width=True)
 
     # Auditoria comparativa por mês
     st.write("---")
-    st.subheader("📈 Auditoria Comparativa Mensal por Quarteirão")
-    df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
+    st.subheader("📈 Auditoria Comparativa Mensal")
+    df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y", errors="coerce")
     df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
 
     df_audit = (
@@ -313,32 +296,35 @@ with aba_reconhecimento:
     # Gráfico analítico corrigido
     st.write("---")
     quarteiroes_disponiveis = df_audit["Quarteirao"].unique()
-    quart_sel = st.selectbox(
-        "Selecione o Quarteirão para Auditoria Gráfica", quarteiroes_disponiveis
-    )
-    df_quart_audit = df_audit[df_audit["Quarteirao"] == quart_sel].sort_values(
-        "AnoMes"
-    )
+    if len(quarteiroes_disponiveis) > 0:
+      quart_sel = st.selectbox(
+          "Selecione o Quarteirão para Auditoria Gráfica", quarteiroes_disponiveis
+      )
+      df_quart_audit = df_audit[df_audit["Quarteirao"] == quart_sel].sort_values(
+          "AnoMes"
+      )
 
-    df_melted = df_quart_audit.melt(
-        id_vars=["AnoMes"],
-        value_vars=["Residencias", "Outros", "TB", "Comercio", "Total"],
-        var_name="Categoria",
-        value_name="Valor",
-    )
+      df_melted = df_quart_audit.melt(
+          id_vars=["AnoMes"],
+          value_vars=["Residencias", "Outros", "TB", "Comercio", "Total"],
+          var_name="Categoria",
+          value_name="Valor",
+      )
 
-    chart_audit = (
-        alt.Chart(df_melted)
-        .mark_line(point=True)
-        .encode(
-            x="AnoMes:N",
-            y="Valor:Q",
-            color="Categoria:N",
-            tooltip=["AnoMes", "Categoria", "Valor"],
-        )
-        .properties(height=400, title=f"Evolução do Quarteirão {quart_sel}")
-    )
-    st.altair_chart(chart_audit, use_container_width=True)
+      chart_audit = (
+          alt.Chart(df_melted)
+          .mark_line(point=True)
+          .encode(
+              x="AnoMes:N",
+              y="Valor:Q",
+              color="Categoria:N",
+              tooltip=["AnoMes", "Categoria", "Valor"],
+          )
+          .properties(height=400, title=f"Evolução do Quarteirão {quart_sel}")
+      )
+      st.altair_chart(chart_audit, use_container_width=True)
+  else:
+    st.info("ℹ️ Realize registros no 'Relatório Diário' para gerar os dados de reconhecimento e auditoria automaticamente.")
 
 # ==================== ABA 3: BACKUP ROBUSTO EM ZIP ====================
 with aba_backup:
@@ -364,7 +350,7 @@ with aba_backup:
 
         if "Data Registro" in df_recon.columns:
           df_recon["Data"] = pd.to_datetime(
-              df_recon["Data Registro"], format="%d/%m/%Y"
+              df_recon["Data Registro"], format="%d/%m/%Y", errors="coerce"
           )
           df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
           df_audit = (

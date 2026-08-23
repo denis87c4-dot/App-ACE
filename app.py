@@ -249,10 +249,10 @@ with aba_fechadas:
       c_filtro1, c_filtro2 = st.columns(2)
       with c_filtro1:
         quarteiroes_f = ["Todos"] + list(df_fechados["Quarteirao"].unique())
-        quart_filtro = st.selectbox("Filtrar por Quarteirão", quarteiroes_f)
+        quart_filtro = st.selectbox("Filtrar por Quarteirão", quarteiroes_f, key="filtro_quart_fechados")
       with c_filtro2:
         agentes_f = ["Todos"] + list(df_fechados["Agente"].unique())
-        agente_filtro = st.selectbox("Filtrar por Agente", agentes_f)
+        agente_filtro = st.selectbox("Filtrar por Agente", agentes_f, key="filtro_agente_fechados")
 
       df_filtrado_fechados = df_fechados.copy()
       if quart_filtro != "Todos":
@@ -260,7 +260,7 @@ with aba_fechadas:
       if agente_filtro != "Todos":
         df_filtrado_fechados = df_filtrado_fechados[df_filtrado_fechados["Agente"] == agente_filtro]
 
-      st.markdown("### 📋 Lista Detalhada para Roteiro de Retorno")
+      st.markdown("### 📋 Tabela Detalhada (Roteiro de Retorno)")
       st.dataframe(df_filtrado_fechados, use_container_width=True)
 
       # Gráfico ilustrativo de incidência de imóveis fechados por quarteirão

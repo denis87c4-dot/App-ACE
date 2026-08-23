@@ -1,371 +1,167 @@
-from datetime import datetime
-import json
-import pandas as pd
-import streamlit as st
+import io, zipfile, os
+import matplotlib.pyplot as plt
 
-st.set_page_config(
-    page_title="App ACE - Controle de Imóveis",
-    page_icon="🏡",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #FFFFFF;
-        color: #1E293B;
-    }
-    h1, h2, h3 {
-        color: #0F172A;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    }
-    .metric-card {
-        background-color: #F8FAFC;
-        border: 1px solid #E2E8F0;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        text-align: center;
-    }
-    .metric-card h3 {
-        margin: 0;
-        color: #64748B;
-        font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-    .metric-card p {
-        margin: 5px 0 0 0;
-        color: #0F172A;
-        font-size: 28px;
-        font-weight: bold;
-    }
-    .stButton>button {
-        background-color: #2563EB;
-        color: white;
-        border-radius: 8px;
-        padding: 10px 24px;
-        font-weight: 600;
-        border: none;
-        width: 100%;
-    }
-    .stButton>button:hover {
-        background-color: #1D4ED8;
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
-
-if "vistorias" not in st.session_state:
-    st.session_state.vistorias = []
-
-st.markdown(
-    """
-    <div style="padding: 15px 0; border-bottom: 2px solid #F1F5F9; margin-bottom: 25px;">
-        <h1 style="margin:0; font-size: 32px;">🏡 Gestão de Campo - ACE</h1>
-        <p style="margin:5px 0 0 0; color: #64748B; font-size: 16px;">Sistema completo de registro, filtros avançados, histórico duplo e restauração por backup.</p>
-    </div>
-""",
-    unsafe_allow_html=True,
-)
-
-# Abas principais do sistema
-aba_cadastro, aba_busca, aba_backup = st.tabs(
+# ==================== ABAS PRINCIPAIS ====================
+aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(
     [
         "📝 Registrar Visita",
         "🔍 Busca Avançada & Recuperação",
         "💾 Central de Backup",
+        "📊 Reconhecimento",
     ]
 )
 
-with aba_cadastro:
-    col_m1, col_m2, col_m3 = st.columns(3)
-    total_visitas = len(st.session_state.vistorias)
+# ==================== ABA RECONHECIMENTO ====================
+with aba_reconhecimento:
+    st.subheader("📊 Reconhecimento de Imóveis por Quarteirão")
+    st.markdown("Cadastre a quantidade de imóveis por categoria em cada quarteirão.")
 
-    imoveis_recuperados_geral = set()
-    for v in st.session_state.vistorias:
-        if v.get("Visita") == "Recuperada":
-            chave = f"{v.get('Quarteirao')} - {v.get('Rua')} - N° {v.get('Numero')}"
-            imoveis_recuperados_geral.add(chave)
+    if "reconhecimento" not in st.session_state:
+        st.session_state.reconhecimento = []
 
-    fechadas_pendentes_count = sum(
-        1
-        for v in st.session_state.vistorias
-        if v.get("Visita") == "Fechada"
-        and f"{v.get('Quarteirao')} - {v.get('Rua')} - N° {v.get('Numero')}"
-        not in imoveis_recuperados_geral
-    )
+    with st.form("form_reconhecimento", clear_on_submit=True):
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            quarteirao_rec = st.text_input("Número do Quarteirão", placeholder="Ex: 142")
+        with col_r2:
+            lado_rec = st.text_input("Lado", placeholder="Ex: A ou Norte")
 
-    with col_m1:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <h3>Total Registrado</h3>
-                <p>{total_visitas}</p>
-            </div>
-        """,
-            unsafe_allow_html=True,
-        )
+        col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+        with col_c1: residencias = st.number_input("Residências", min_value=0, step=1)
+        with col_c2: outros = st.number_input("Outros", min_value=0, step=1)
+        with col_c3: tb = st.number_input("TB", min_value=0, step=1)
+        with col_c4: comercio = st.number_input("Comércio", min_value=0, step=1)
 
-    with col_m2:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-                <h3>Fechadas Pendentes</h3>
-                <p style="color: #DC2626;">{fechadas_pendentes_count}</p>
-            </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-    with col_m3:
-        st.markdown(
-            """
-            <div class="metric-card">
-                <h3>Status do Sistema</h3>
-                <p style="color: #16A34A; font-size: 20px; margin-top: 10px;">● Online & Seguro</p>
-            </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-    st.write("---")
-    st.subheader("📝 Novo Registro de Visita")
-
-    with st.form("form_ace", clear_on_submit=True):
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            data_visita = st.date_input("Data", value=datetime.today())
-            quarteirao = st.text_input(
-                "Número do Quarteirão", placeholder="Ex: 142"
-            )
-            lado = st.text_input("Lado", placeholder="Ex: A ou Norte")
-
-        with col2:
-            rua = st.text_input(
-                "Rua / Logradouro", placeholder="Ex: Rua das Flores"
-            )
-            numero_imovel = st.text_input(
-                "Número do Imóvel", placeholder="Ex: 450"
-            )
-            hora_entrada = st.time_input("Hora da Entrada", value=datetime.now())
-
-        with col3:
-            st.markdown("<br>", unsafe_allow_html=True)
-            tipo_imovel = st.selectbox(
-                "Tipo do Imóvel", ["Outros", "Residencia", "TB", "Comércio"]
-            )
-            status_visita = st.selectbox(
-                "Condição da Visita", ["Normal", "Recuperada", "Fechada"]
-            )
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        submitted = st.form_submit_button("💾 Salvar Registro de Visita")
-
-        if submitted:
-            if not quarteirao or not rua or not numero_imovel:
-                st.warning(
-                    "⚠️ Por favor, preencha Quarteirão, Rua e Número do Imóvel."
-                )
+        submitted_rec = st.form_submit_button("💾 Salvar Reconhecimento")
+        if submitted_rec:
+            if not quarteirao_rec:
+                st.warning("⚠️ Informe o número do quarteirão.")
             else:
-                nova_vistoria = {
-                    "Data": data_visita.strftime("%d/%m/%Y"),
-                    "Quarteirao": str(quarteirao).strip(),
-                    "Lado": lado,
-                    "Rua": str(rua).strip().title(),
-                    "Numero": str(numero_imovel).strip(),
-                    "Tipo Imovel": tipo_imovel,
-                    "Hora": hora_entrada.strftime("%H:%M"),
-                    "Visita": status_visita,
+                total = residencias + outros + tb + comercio
+                novo_reconhecimento = {
+                    "Quarteirao": str(quarteirao_rec).strip(),
+                    "Lado": lado_rec,
+                    "Residencias": residencias,
+                    "Outros": outros,
+                    "TB": tb,
+                    "Comercio": comercio,
+                    "Total": total,
+                    "Data Registro": datetime.today().strftime("%d/%m/%Y"),
                 }
-                st.session_state.vistorias.append(nova_vistoria)
-                st.success("✅ Visita cadastrada com sucesso!")
+                st.session_state.reconhecimento.append(novo_reconhecimento)
+                st.success("✅ Reconhecimento cadastrado com sucesso!")
 
-    if st.session_state.vistorias:
+    if st.session_state.reconhecimento:
         st.write("---")
-        st.subheader("📊 Histórico Geral da Sessão")
-        df_geral = pd.DataFrame(st.session_state.vistorias)
-        st.dataframe(df_geral, use_container_width=True)
+        st.subheader("📊 Histórico de Reconhecimento")
+        df_recon = pd.DataFrame(st.session_state.reconhecimento)
+        st.dataframe(df_recon, use_container_width=True)
 
-        csv = df_geral.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Baixar Relatório em CSV",
-            data=csv,
-            file_name=f"vistorias_ace_{datetime.today().strftime('%Y-%m-%d')}.csv",
-            mime="text/csv",
-        )
+        # Totais gerais
+        total_resid = df_recon["Residencias"].sum()
+        total_outros = df_recon["Outros"].sum()
+        total_tb = df_recon["TB"].sum()
+        total_comercio = df_recon["Comercio"].sum()
+        total_geral = df_recon["Total"].sum()
 
-with aba_busca:
-    st.subheader("🔍 Gerenciamento Avançado & Painel de Recuperação")
-    st.markdown(
-        "Filtre os dados ou utilize o painel interativo abaixo para converter casas fechadas em recuperadas."
-    )
+        st.write("---")
+        st.subheader("📈 Totais por Categoria")
+        col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
+        with col_t1: st.metric("Residências", total_resid)
+        with col_t2: st.metric("Outros", total_outros)
+        with col_t3: st.metric("TB", total_tb)
+        with col_t4: st.metric("Comércio", total_comercio)
+        with col_t5: st.metric("Total Geral", total_geral)
 
-    if not st.session_state.vistorias:
-        st.info("Nenhuma vistoria registrada ainda para realizar buscas.")
-    else:
-        df_busca = pd.DataFrame(st.session_state.vistorias)
+        st.write("---")
+        st.subheader("📊 Visualização Gráfica")
 
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-        with col_f1:
-            quart_unicos = sorted(df_busca["Quarteirao"].unique().tolist())
-            filtro_quarteirao = st.selectbox(
-                "Quarteirão", ["Todos"] + quart_unicos, key="f_quart"
-            )
-        with col_f2:
-            ruas_unicas = sorted(df_busca["Rua"].unique().tolist())
-            filtro_rua = st.selectbox("Rua", ["Todas"] + ruas_unicas, key="f_rua")
-        with col_f3:
-            datas_unicas = sorted(df_busca["Data"].unique().tolist())
-            filtro_data = st.selectbox(
-                "Data da Visita", ["Todas"] + datas_unicas, key="f_data"
-            )
-        with col_f4:
-            filtro_status = st.selectbox(
-                "Status",
-                ["Todos", "Apenas Fechadas Pendentes", "Recuperadas", "Normal"],
-                key="f_status",
-            )
+        # Gráfico de Pizza
+        fig1, ax1 = plt.subplots()
+        categorias = ["Residências", "Outros", "TB", "Comércio"]
+        valores = [total_resid, total_outros, total_tb, total_comercio]
+        ax1.pie(valores, labels=categorias, autopct="%1.1f%%", startangle=90)
+        ax1.axis("equal")
+        st.pyplot(fig1)
 
-        df_busca["Chave_Imovel"] = (
-            df_busca["Quarteirao"]
-            + " - "
-            + df_busca["Rua"]
-            + " - N° "
-            + df_busca["Numero"]
-        )
+        # Gráfico de Barras
+        fig2, ax2 = plt.subplots()
+        ax2.bar(categorias, valores, color=["#2563EB", "#10B981", "#F59E0B", "#DC2626"])
+        ax2.set_ylabel("Quantidade de Imóveis")
+        ax2.set_title("Distribuição por Categoria")
+        st.pyplot(fig2)
 
-        df_filtrado = df_busca.copy()
-        if filtro_quarteirao != "Todos":
-            df_filtrado = df_filtrado[
-                df_filtrado["Quarteirao"] == filtro_quarteirao
+        # Filtro por quarteirão
+        st.write("---")
+        st.subheader("🔍 Visualização por Quarteirão")
+        quarts_unicos = df_recon["Quarteirao"].unique().tolist()
+        quart_sel = st.selectbox("Selecione o Quarteirão", quarts_unicos)
+        df_quart = df_recon[df_recon["Quarteirao"] == quart_sel]
+
+        if not df_quart.empty:
+            vals_q = [
+                df_quart["Residencias"].sum(),
+                df_quart["Outros"].sum(),
+                df_quart["TB"].sum(),
+                df_quart["Comercio"].sum(),
             ]
-        if filtro_rua != "Todas":
-            df_filtrado = df_filtrado[df_filtrado["Rua"] == filtro_rua]
-        if filtro_data != "Todas":
-            df_filtrado = df_filtrado[df_filtrado["Data"] == filtro_data]
+            fig_q, ax_q = plt.subplots()
+            ax_q.bar(categorias, vals_q, color=["#2563EB", "#10B981", "#F59E0B", "#DC2626"])
+            ax_q.set_title(f"Distribuição no Quarteirão {quart_sel}")
+            st.pyplot(fig_q)
 
-        imoveis_recuperados_set = set(
-            df_busca[df_busca["Visita"] == "Recuperada"]["Chave_Imovel"]
-        )
-
-        if filtro_status == "Apenas Fechadas Pendentes":
-            df_filtrado = df_filtrado[
-                (df_filtrado["Visita"] == "Fechada")
-                & (~df_filtrado["Chave_Imovel"].isin(imoveis_recuperados_set))
-            ]
-        elif filtro_status == "Recuperadas":
-            df_filtrado = df_filtrado[df_filtrado["Visita"] == "Recuperada"]
-        elif filtro_status == "Normal":
-            df_filtrado = df_filtrado[df_filtrado["Visita"] == "Normal"]
-
-        st.write("---")
-        st.markdown(
-            f"### 📋 Lista Filtrada ({len(df_filtrado)} registros)"
-        )
-        if not df_filtrado.empty:
-            st.dataframe(
-                df_filtrado[
-                    [
-                        "Data",
-                        "Quarteirao",
-                        "Lado",
-                        "Rua",
-                        "Numero",
-                        "Tipo Imovel",
-                        "Visita",
-                    ]
-                ],
-                use_container_width=True,
-            )
-        else:
-            st.success("🎉 Nenhum imóvel encontrado com estes filtros!")
-
-        st.write("---")
-        st.subheader("⚡ Painel de Conversão: Registrar Recuperação")
-        df_pendentes_painel = df_busca[
-            (df_busca["Visita"] == "Fechada")
-            & (~df_busca["Chave_Imovel"].isin(imoveis_recuperados_set))
-        ]
-
-        if not df_pendentes_painel.empty:
-            for idx, row in df_pendentes_painel.iterrows():
-                col_info, col_check = st.columns([4, 1])
-                with col_info:
-                    st.markdown(
-                        f"**Q:** {row['Quarteirao']} | **Rua:** {row['Rua']}, **N° {row['Numero']}** (Fechada em: {row['Data']})"
-                    )
-                with col_check:
-                    if st.checkbox("Recuperar", key=f"rec_{idx}"):
-                        novo_registro_recuperado = {
-                            "Data": datetime.today().strftime("%d/%m/%Y"),
-                            "Quarteirao": row["Quarteirao"],
-                            "Lado": row.get("Lado", ""),
-                            "Rua": row["Rua"],
-                            "Numero": row["Numero"],
-                            "Tipo Imovel": row["Tipo Imovel"],
-                            "Hora": datetime.now().strftime("%H:%M"),
-                            "Visita": "Recuperada",
-                        }
-                        st.session_state.vistorias.append(
-                            novo_registro_recuperado
-                        )
-                        st.success(
-                            "✅ Histórico mantido + Recuperação registrada!"
-                        )
-                        st.rerun()
-        else:
-            st.success(
-                "✨ Perfeito! Não há imóveis fechados pendentes para recuperar."
-            )
-
+# ==================== BACKUP ROBUSTO EM ZIP ====================
 with aba_backup:
-    st.subheader("🔒 Central de Segurança e Backup")
+    st.subheader("🔐 Central de Segurança e Backup Avançado")
+
+    ARQUIVO_VISTORIAS = "vistorias.csv"
+    ARQUIVO_RECONHECIMENTO = "reconhecimento.csv"
+
+    def salvar_backup_automatico():
+        try:
+            if "vistorias" in st.session_state and st.session_state.vistorias:
+                pd.DataFrame(st.session_state.vistorias).to_csv(ARQUIVO_VISTORIAS, index=False)
+            if "reconhecimento" in st.session_state and st.session_state.reconhecimento:
+                pd.DataFrame(st.session_state.reconhecimento).to_csv(ARQUIVO_RECONHECIMENTO, index=False)
+        except:
+            pass
+
+    salvar_backup_automatico()
 
     col_b1, col_b2 = st.columns(2)
-
     with col_b1:
-        st.markdown("### 📤 Salvar Backup")
-        st.markdown("Baixe um arquivo de segurança com todas as suas vistorias.")
-        if st.session_state.vistorias:
-            dados_json = json.dumps(
-                st.session_state.vistorias, ensure_ascii=False, indent=4
-            )
-            data_atual = datetime.today().strftime("%Y-%m-%d_%H-%M")
+        st.markdown("### 📤 Salvar Backup Completo")
+        arquivos_para_backup = [ARQUIVO_VISTORIAS, ARQUIVO_RECONHECIMENTO]
+        arquivos_existentes = [f for f in arquivos_para_backup if os.path.exists(f)]
+
+        if arquivos_existentes:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                for arq in arquivos_existentes:
+                    zip_file.write(arq)
+            zip_buffer.seek(0)
             st.download_button(
-                label="💾 Baixar Arquivo de Backup",
-                data=dados_json,
-                file_name=f"backup_ace_{data_atual}.json",
-                mime="application/json",
+                label="💾 Baixar Backup (.zip)",
+                data=zip_buffer,
+                file_name=f"backup_ace_{datetime.today().strftime('%Y-%m-%d')}.zip",
+                mime="application/zip",
             )
         else:
             st.info("⚠️ Nenhum dado cadastrado para exportar.")
 
     with col_b2:
-        st.markdown("### 📥 Restaurar / Puxar Backup")
-        st.markdown(
-            "Selecione um arquivo de backup (`.json`) salvo anteriormente no seu celular."
-        )
-        arquivo_submetido = st.file_uploader(
-            "Carregar arquivo de backup", type=["json"]
-        )
-
-        if arquivo_submetido is not None:
+        st.markdown("### 📥 Restaurar Backup")
+        arquivo_upload = st.file_uploader("Envie seu arquivo ZIP de backup", type="zip")
+        if arquivo_upload is not None:
             try:
-                dados_carregados = json.load(arquivo_submetido)
-                if isinstance(dados_carregados, list):
-                    st.session_state.vistorias = dados_carregados
-                    st.success(
-                        f"🎉 Sucesso! {len(dados_carregados)} registros carregados e restaurados com sucesso!"
-                    )
+                with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
+                    zip_ref.extractall(".")
+                if os.path.exists(ARQUIVO_VISTORIAS):
+                    st.session_state.vistorias = pd.read_csv(ARQUIVO_VISTORIAS).to_dict(orient="records")
+                if os.path.exists(ARQUIVO_RECONHECIMENTO):
+                    st.session_state.reconhecimento = pd.read_csv(ARQUIVO_RECONHECIMENTO).to_dict(orient="records")
+                st.success("✅ Dados restaurados com sucesso! Recarregue a página.")
+                if st.button("🔄 Recarregar App"):
                     st.rerun()
-                else:
-                    st.error(
-                        "⚠️ O arquivo selecionado não está no formato correto."
-                    )
             except Exception as e:
-                st.error(f"Erro ao ler o arquivo: {e}")
+                st.error(f"Erro ao restaurar arquivo: {e}")

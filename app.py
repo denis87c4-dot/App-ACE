@@ -1,8 +1,8 @@
-import io, zipfile, os
-import matplotlib.pyplot as plt
+import altair as alt
 import pandas as pd
 import streamlit as st
 from datetime import datetime
+import io, zipfile, os
 
 # ==================== ABAS PRINCIPAIS ====================
 aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(
@@ -79,20 +79,28 @@ with aba_reconhecimento:
         st.write("---")
         st.subheader("📊 Visualização Gráfica")
 
-        # Gráfico de Pizza
-        fig1, ax1 = plt.subplots()
-        categorias = ["Residências", "Outros", "TB", "Comércio"]
-        valores = [total_resid, total_outros, total_tb, total_comercio]
-        ax1.pie(valores, labels=categorias, autopct="%1.1f%%", startangle=90)
-        ax1.axis("equal")
-        st.pyplot(fig1)
+        # DataFrame para gráficos
+        df_cat = pd.DataFrame({
+            "Categoria": ["Residências", "Outros", "TB", "Comércio"],
+            "Valor": [total_resid, total_outros, total_tb, total_comercio]
+        })
 
         # Gráfico de Barras
-        fig2, ax2 = plt.subplots()
-        ax2.bar(categorias, valores, color=["#2563EB", "#10B981", "#F59E0B", "#DC2626"])
-        ax2.set_ylabel("Quantidade de Imóveis")
-        ax2.set_title("Distribuição por Categoria")
-        st.pyplot(fig2)
+        chart_bar = alt.Chart(df_cat).mark_bar().encode(
+            x="Categoria",
+            y="Valor",
+            color="Categoria",
+            tooltip=["Categoria", "Valor"]
+        ).properties(height=300)
+        st.altair_chart(chart_bar, use_container_width=True)
+
+        # Gráfico de Pizza
+        chart_pie = alt.Chart(df_cat).mark_arc().encode(
+            theta="Valor",
+            color="Categoria",
+            tooltip=["Categoria", "Valor"]
+        ).properties(height=300)
+        st.altair_chart(chart_pie, use_container_width=True)
 
         # Filtro por quarteirão
         st.write("---")
@@ -102,69 +110,19 @@ with aba_reconhecimento:
         df_quart = df_recon[df_recon["Quarteirao"] == quart_sel]
 
         if not df_quart.empty:
-            vals_q = [
-                df_quart["Residencias"].sum(),
-                df_quart["Outros"].sum(),
-                df_quart["TB"].sum(),
-                df_quart["Comercio"].sum(),
-            ]
-            fig_q, ax_q = plt.subplots()
-            ax_q.bar(categorias, vals_q, color=["#2563EB", "#10B981", "#F59E0B", "#DC2626"])
-            ax_q.set_title(f"Distribuição no Quarteirão {quart_sel}")
-            st.pyplot(fig_q)
-
-# ==================== BACKUP ROBUSTO EM ZIP ====================
-with aba_backup:
-    st.subheader("🔐 Central de Segurança e Backup Avançado")
-
-    ARQUIVO_VISTORIAS = "vistorias.csv"
-    ARQUIVO_RECONHECIMENTO = "reconhecimento.csv"
-
-    def salvar_backup_automatico():
-        try:
-            if "vistorias" in st.session_state and st.session_state.vistorias:
-                pd.DataFrame(st.session_state.vistorias).to_csv(ARQUIVO_VISTORIAS, index=False)
-            if "reconhecimento" in st.session_state and st.session_state.reconhecimento:
-                pd.DataFrame(st.session_state.reconhecimento).to_csv(ARQUIVO_RECONHECIMENTO, index=False)
-        except:
-            pass
-
-    salvar_backup_automatico()
-
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        st.markdown("### 📤 Salvar Backup Completo")
-        arquivos_para_backup = [ARQUIVO_VISTORIAS, ARQUIVO_RECONHECIMENTO]
-        arquivos_existentes = [f for f in arquivos_para_backup if os.path.exists(f)]
-
-        if arquivos_existentes:
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                for arq in arquivos_existentes:
-                    zip_file.write(arq)
-            zip_buffer.seek(0)
-            st.download_button(
-                label="💾 Baixar Backup (.zip)",
-                data=zip_buffer,
-                file_name=f"backup_ace_{datetime.today().strftime('%Y-%m-%d')}.zip",
-                mime="application/zip",
-            )
-        else:
-            st.info("⚠️ Nenhum dado cadastrado para exportar.")
-
-    with col_b2:
-        st.markdown("### 📥 Restaurar Backup")
-        arquivo_upload = st.file_uploader("Envie seu arquivo ZIP de backup", type="zip")
-        if arquivo_upload is not None:
-            try:
-                with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
-                    zip_ref.extractall(".")
-                if os.path.exists(ARQUIVO_VISTORIAS):
-                    st.session_state.vistorias = pd.read_csv(ARQUIVO_VISTORIAS).to_dict(orient="records")
-                if os.path.exists(ARQUIVO_RECONHECIMENTO):
-                    st.session_state.reconhecimento = pd.read_csv(ARQUIVO_RECONHECIMENTO).to_dict(orient="records")
-                st.success("✅ Dados restaurados com sucesso! Recarregue a página.")
-                if st.button("🔄 Recarregar App"):
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao restaurar arquivo: {e}")
+            df_quart_cat = pd.DataFrame({
+                "Categoria": ["Residências", "Outros", "TB", "Comércio"],
+                "Valor": [
+                    df_quart["Residencias"].sum(),
+                    df_quart["Outros"].sum(),
+                    df_quart["TB"].sum(),
+                    df_quart["Comercio"].sum(),
+                ]
+            })
+            chart_quart = alt.Chart(df_quart_cat).mark_bar().encode(
+                x="Categoria",
+                y="Valor",
+                color="Categoria",
+                tooltip=["Categoria", "Valor"]
+            ).properties(height=300, title=f"Distribuição no Quarteirão {quart_sel}")
+            st.altair_chart(chart_quart, use_container_width=True)

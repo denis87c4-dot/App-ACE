@@ -5,11 +5,11 @@ from datetime import datetime
 import io, zipfile, os
 
 # ==================== CONFIGURAÇÃO DA PÁGINA ====================
-st.set_page_config(page_title="Sistema ACE - Gestão de Imóveis", layout="wide")
+st.set_page_config(page_title="Sistema ACE - Gestão Integrada de Endemias", layout="wide")
 
-st.title("🛡️ Sistema de Controle de Endemias (ACE)")
+st.title("🛡️ Sistema de Controle de Endemias (ACE - Painel Integrado)")
 
-# Inicialização de estados globais
+# Inicialização de estados globais unificados
 if "vistorias" not in st.session_state:
     st.session_state.vistorias = []
 if "reconhecimento" not in st.session_state:
@@ -18,52 +18,119 @@ if "reconhecimento" not in st.session_state:
 # ==================== ABAS PRINCIPAIS ====================
 aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(
     [
-        "📝 Registrar Visita",
+        "📝 Relatório Diário",
         "🔍 Busca Avançada & Recuperação",
         "💾 Central de Backup",
-        "📊 Reconhecimento",
+        "📊 Reconhecimento & Auditoria",
     ]
 )
 
-# ==================== ABA 1: REGISTRAR VISITA (Exemplo Básico) ====================
+# ==================== ABA 1: RELATÓRIO DIÁRIO ====================
 with aba_cadastro:
-    st.subheader("📝 Cadastro de Vistorias de Imóveis")
-    with st.form("form_vistoria", clear_on_submit=True):
-        col_v1, col_v2 = st.columns(2)
-        with col_v1:
-            imovel_id = st.text_input("Identificação do Imóvel / Endereço")
-        with col_v2:
-            status_imovel = st.selectbox("Situação", ["Normal", "Recusado", "Fechado", "Com Foco"])
-        
-        submitted_vistoria = st.form_submit_button("💾 Salvar Vistoria")
-        if submitted_vistoria:
-            if imovel_id:
-                st.session_state.vistorias.append({
-                    "Imovel": imovel_id,
-                    "Status": status_imovel,
-                    "Data": datetime.today().strftime("%d/%m/%Y")
-                })
-                st.success("✅ Vistoria registrada com sucesso!")
-            else:
-                st.warning("⚠️ Informe a identificação do imóvel.")
+    st.subheader("📋 Relatório Diário de Campo")
+    st.markdown("Preencha os dados da visita domiciliar ou comercial realizada no quarteirão.")
 
+    with st.form("form_relatorio_diario", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            data_visita = st.date_input("Data da Visita", value=datetime.today())
+            num_quarteirao = st.text_input("Nº do Quarteirão", placeholder="Ex: 142B")
+            lado = st.selectbox("Lado", ["Ímpar", "Par", "Único", "A", "B", "C", "Norte", "Sul"])
+            
+        with col2:
+            nome_rua = st.text_input("Nome da Rua / Logradouro")
+            # Suporta alfanuméricos, barras e traços (ex: 2/1, 3A/5, Lote 12)
+            num_casa = st.text_input("Nº / Identificação do Imóvel", placeholder="Ex: 3A/5, 2/1")
+            
+            # Dropdown de Tipos de Imóvel comuns em endemias
+            tipo_imovel = st.selectbox(
+                "Tipo de Imóvel", 
+                ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"]
+            )
+
+        with col3:
+            hora_entrada = st.time_input("Hora de Entrada", value=datetime.now().time())
+            vistoria = st.selectbox("Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"])
+            agente_resp = st.text_input("Agente Responsável", placeholder="Ex: Denison")
+
+        st.markdown("---")
+        st.subheader("🔬 Dados Entomológicos e Tratamento")
+        
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        
+        with c1:
+            eliminados = st.number_input("Eliminados", min_value=0, value=0, help="Depósitos eliminados")
+        with c2:
+            tubitos = st.number_input("Tubitos", min_value=0, value=0, help="Amostras de larvas")
+        with c3:
+            imoveis_tratados = st.number_input("Tratados", min_value=0, value=0, help="Imóveis tratados")
+        with c4:
+            gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=0.0)
+        with c5:
+            depositos = st.number_input("Depósitos", min_value=0, value=0, help="Qtd de depósitos")
+        with c6:
+            litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=0.0)
+
+        submitted = st.form_submit_button("💾 Salvar Registro Diário", use_container_width=True)
+
+        if submitted:
+            if not num_quarteirao or not nome_rua or not num_casa:
+                st.error("⚠️ Por favor, preencha o Quarteirão, a Rua e o Número/Identificação da Casa.")
+            else:
+                novo_registro = {
+                    "Data": data_visita.strftime("%d/%m/%Y"),
+                    "Quarteirao": str(num_quarteirao).strip(),
+                    "Lado": lado,
+                    "Rua": nome_rua,
+                    "Casa": str(num_casa), 
+                    "Tipo Imovel": tipo_imovel,
+                    "Hora": hora_entrada.strftime("%H:%M"),
+                    "Vistoria": vistoria,
+                    "Agente": agente_resp,
+                    "Eliminados": int(eliminados),
+                    "Tubitos": int(tubitos),
+                    "Tratados": int(imoveis_tratados),
+                    "Gramas": float(gramas),
+                    "Depósitos": int(depositos),
+                    "Litros": float(litros)
+                }
+                
+                st.session_state.vistorias.append(novo_registro)
+                st.success(f"✅ Imóvel **{num_casa}** ({nome_rua}) registrado com sucesso!")
+
+    # --- PAINEL DE RESUMO DO DIA ---
     if st.session_state.vistorias:
-        st.write("---")
-        st.subheader("📋 Vistorias Recentes")
-        st.dataframe(pd.DataFrame(st.session_state.vistorias), use_container_width=True)
+        st.markdown("---")
+        st.subheader("📊 Resumo Operacional Acumulado")
+        
+        df_v = pd.DataFrame(st.session_state.vistorias)
+        
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Total Visitas", len(df_v))
+        m2.metric("Dep. Eliminados", int(df_v["Eliminados"].sum()))
+        m3.metric("Tubitos Coletados", int(df_v["Tubitos"].sum()))
+        m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
+        m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
+
+        with st.expander("👁️ Ver Todos os Registros Diários na Sessão", expanded=False):
+            st.dataframe(df_v, use_container_width=True)
+            
+            if st.button("🗑️ Limpar Todos os Registros Diários"):
+                st.session_state.vistorias = []
+                st.rerun()
 
 # ==================== ABA 2: BUSCA AVANÇADA ====================
 with aba_busca:
     st.subheader("🔍 Busca Avançada e Filtros Globais")
     
-    # Unificando dados para busca se houver
     if st.session_state.reconhecimento or st.session_state.vistorias:
-        aba_escolha = st.selectbox("Escolha a base para buscar", ["Reconhecimento", "Vistorias"])
+        base_escolhida = st.selectbox("Escolha a base para buscar", ["Relatório Diário (Vistorias)", "Reconhecimento"])
         
-        df_base = pd.DataFrame(st.session_state.reconhecimento) if aba_escolha == "Reconhecimento" else pd.DataFrame(st.session_state.vistorias)
+        df_base = pd.DataFrame(st.session_state.vistorias) if "Diário" in base_escolhida else pd.DataFrame(st.session_state.reconhecimento)
         
         if not df_base.empty:
-            termo = st.text_input("🔍 Digite qualquer termo para buscar na base:", placeholder="Ex: Nome do auditor, número do quarteirão...")
+            termo = st.text_input("🔍 Digite qualquer termo para buscar na base escolhida:", placeholder="Ex: Rua das Flores, 142, Normal...")
             if termo:
                 mask = df_base.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
                 df_resultado = df_base[mask]
@@ -77,10 +144,10 @@ with aba_busca:
     else:
         st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
 
-# ==================== ABA 4: RECONHECIMENTO (Com Correção de Ordenação e Variação) ====================
+# ==================== ABA 4: RECONHECIMENTO & AUDITORIA ====================
 with aba_reconhecimento:
-    st.subheader("📊 Reconhecimento de Imóveis por Quarteirão")
-    st.markdown("Cadastre a quantidade de imóveis por categoria em cada quarteirão, com data e auditoria.")
+    st.subheader("📊 Reconhecimento de Imóveis & Integração com Vistorias")
+    st.markdown("Cadastre a quantidade de imóveis por categoria em cada quarteirão e cruze com o relatório diário.")
 
     with st.form("form_reconhecimento", clear_on_submit=True):
         col_r1, col_r2 = st.columns(2)
@@ -123,55 +190,47 @@ with aba_reconhecimento:
 
     if st.session_state.reconhecimento:
         st.write("---")
-        st.subheader("📊 Histórico de Reconhecimento")
+        st.subheader("📈 Cruzamento: Planejado (Reconhecimento) x Realizado (Diário)")
+        
         df_recon = pd.DataFrame(st.session_state.reconhecimento)
-        st.dataframe(df_recon, use_container_width=True)
+        
+        if st.session_state.vistorias:
+            df_vist = pd.DataFrame(st.session_state.vistorias)
+            df_vist_resumo = df_vist.pivot_table(
+                index="Quarteirao", 
+                columns="Vistoria", 
+                values="Casa", 
+                aggfunc="count", 
+                fill_value=0
+            ).reset_index()
+            
+            df_integrado = pd.merge(df_recon, df_vist_resumo, on="Quarteirao", how="left").fillna(0)
+            st.dataframe(df_integrado, use_container_width=True)
+        else:
+            st.info("ℹ️ Cadastre dados no 'Relatório Diário' para habilitar o cruzamento automático por quarteirão.")
+            st.dataframe(df_recon, use_container_width=True)
 
-        # Auditoria comparativa por mês com ORDENAÇÃO CRONOLÓGICA rigorosa
+        # Auditoria comparativa por mês com ordenação cronológica rigorosa
         st.write("---")
-        st.subheader("📈 Auditoria Comparativa por Mês")
+        st.subheader("📈 Auditoria Comparativa Mensal por Quarteirão")
         df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
         df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
 
-        # Agrupamento inicial por mês e quarteirão
         df_audit = df_recon.groupby(["AnoMes", "Quarteirao"]).agg({
-            "Residencias": "sum",
-            "Outros": "sum",
-            "TB": "sum",
-            "Comercio": "sum",
-            "Total": "sum"
+            "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total": "sum"
         }).reset_index()
 
-        # ORDENAÇÃO CRONOLÓGICA CRUCIAL antes do cálculo de delta
         df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
-
-        # Cálculo seguro de variação percentual por quarteirão ao longo do tempo
         df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
 
         st.dataframe(df_audit, use_container_width=True)
 
-        # Seleção de quarteirão para auditoria detalhada
+        # Gráfico analítico
         st.write("---")
         quarteiroes_disponiveis = df_audit["Quarteirao"].unique()
-        quart_sel = st.selectbox("Selecione o Quarteirão para Auditoria", quarteiroes_disponiveis)
+        quart_sel = st.selectbox("Selecione o Quarteirão para Auditoria Gráfica", quarteiroes_disponiveis)
         df_quart_audit = df_audit[df_audit["Quarteirao"] == quart_sel].sort_values("AnoMes")
 
-        # Detectar variações críticas
-        st.subheader("🚨 Variações Críticas")
-        tem_variacao = False
-        for idx, row in df_quart_audit.iterrows():
-            delta = row["Delta_Total"]
-            if not pd.isna(delta):
-                tem_variacao = True
-                if delta > 20:
-                    st.markdown(f"<span style='color:green; font-weight:bold;'>⬆️ Crescimento de {delta:.1f}% em {row['AnoMes']}</span>", unsafe_allow_html=True)
-                elif delta < -20:
-                    st.markdown(f"<span style='color:red; font-weight:bold;'>⬇️ Queda de {delta:.1f}% em {row['AnoMes']}</span>", unsafe_allow_html=True)
-        
-        if not tem_variacao:
-            st.info("Ainda não há dados históricos suficientes (múltiplos meses) para calcular variações neste quarteirão.")
-
-        # Gráfico de evolução por quarteirão
         chart_audit = alt.Chart(
             df_quart_audit.melt(id_vars=["AnoMes"], value_vars=["Residencias","Outros","TB","Comercio","Total"], var_name="Categoria", value_name="Valor")
         ).mark_line(point=True).encode(
@@ -186,7 +245,7 @@ with aba_reconhecimento:
 with aba_backup:
     st.subheader("🔐 Central de Segurança e Backup Avançado")
 
-    ARQUIVO_VISTORIAS = "vistorias.csv"
+    ARQUIVO_VISTORIAS = "vistorias_diarias.csv"
     ARQUIVO_RECONHECIMENTO = "reconhecimento.csv"
     ARQUIVO_AUDITORIA = "auditoria.csv"
 
@@ -198,19 +257,15 @@ with aba_backup:
                 df_recon = pd.DataFrame(st.session_state.reconhecimento)
                 df_recon.to_csv(ARQUIVO_RECONHECIMENTO, index=False)
 
-                # Gerar relatório de auditoria ordenado
-                df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
-                df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
-                df_audit = df_recon.groupby(["AnoMes", "Quarteirao"]).agg({
-                    "Residencias": "sum",
-                    "Outros": "sum",
-                    "TB": "sum",
-                    "Comercio": "sum",
-                    "Total": "sum"
-                }).reset_index()
-                df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
-                df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
-                df_audit.to_csv(ARQUIVO_AUDITORIA, index=False)
+                if "Data Registro" in df_recon.columns:
+                    df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
+                    df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
+                    df_audit = df_recon.groupby(["AnoMes", "Quarteirao"]).agg({
+                        "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total": "sum"
+                    }).reset_index()
+                    df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
+                    df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
+                    df_audit.to_csv(ARQUIVO_AUDITORIA, index=False)
         except Exception as e:
             print(f"Erro no backup automático: {e}")
 
@@ -218,7 +273,7 @@ with aba_backup:
 
     col_b1, col_b2 = st.columns(2)
     with col_b1:
-        st.markdown("### 📤 Salvar Backup Completo")
+        st.markdown("### 📤 Salvar Backup Completo (.zip)")
         arquivos_para_backup = [ARQUIVO_VISTORIAS, ARQUIVO_RECONHECIMENTO, ARQUIVO_AUDITORIA]
         arquivos_existentes = [f for f in arquivos_para_backup if os.path.exists(f)]
 
@@ -229,40 +284,30 @@ with aba_backup:
                     zip_file.write(arq)
             zip_buffer.seek(0)
             st.download_button(
-                label="💾 Baixar Backup (.zip)",
+                label="💾 Baixar Pacote de Backup (.zip)",
                 data=zip_buffer,
                 file_name=f"backup_ace_{datetime.today().strftime('%Y-%m-%d')}.zip",
                 mime="application/zip",
             )
-            
-            if os.path.exists(ARQUIVO_AUDITORIA):
-                st.download_button(
-                    label="📥 Baixar Relatório de Auditoria (CSV)",
-                    data=open(ARQUIVO_AUDITORIA, "rb").read(),
-                    file_name=f"auditoria_ace_{datetime.today().strftime('%Y-%m-%d')}.csv",
-                    mime="text/csv",
-                )
         else:
             st.info("⚠️ Nenhum dado cadastrado para exportar.")
 
     with col_b2:
         st.markdown("### 📥 Restaurar Backup")
-        arquivo_upload = st.file_uploader("Envie seu arquivo ZIP de backup", type="zip")
+        arquivo_upload = st.file_uploader("Envie seu arquivo ZIP de backup anterior", type="zip")
         if arquivo_upload is not None:
             try:
                 with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
                     zip_ref.extractall(".")
                 
-                # Restaurar vistorias
                 if os.path.exists(ARQUIVO_VISTORIAS):
                     df_v = pd.read_csv(ARQUIVO_VISTORIAS)
                     st.session_state.vistorias = df_v.to_dict("records")
                 
-                # Restaurar reconhecimento
                 if os.path.exists(ARQUIVO_RECONHECIMENTO):
                     df_r = pd.read_csv(ARQUIVO_RECONHECIMENTO)
                     st.session_state.reconhecimento = df_r.to_dict("records")
                     
-                st.success("✅ Backup restaurado com sucesso! Atualize a página se necessário.")
+                st.success("✅ Backup restaurado com sucesso! Atualize a página.")
             except Exception as e:
                 st.error(f"❌ Erro ao restaurar o backup: {e}")

@@ -1,4 +1,4 @@
-Import streamlit as st
+import streamlit as st
 import pandas as pd
 import altair as alt
 from datetime import datetime
@@ -36,15 +36,12 @@ with aba_cadastro:
         with col1:
             data_visita = st.date_input("Data da Visita", value=datetime.today())
             num_quarteirao = st.text_input("Nº do Quarteirão", placeholder="Ex: 142B")
-            # CORRIGIDO: Lado do quarteirão apenas com números inteiros
             lado = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1, help="Digite apenas o número do lado (Ex: 1, 2, 3...)")
             
         with col2:
             nome_rua = st.text_input("Nome da Rua / Logradouro")
-            # Suporta alfanuméricos, barras e traços (ex: 2/1, 3A/5, Lote 12)
             num_casa = st.text_input("Nº / Identificação do Imóvel", placeholder="Ex: 3A/5, 2/1")
             
-            # Dropdown de Tipos de Imóvel comuns em endemias
             tipo_imovel = st.selectbox(
                 "Tipo de Imóvel", 
                 ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"]
@@ -164,10 +161,14 @@ with aba_reconhecimento:
             auditor = st.text_input("Responsável/Auditor", placeholder="Ex: Denison")
 
         col_c1, col_c2, col_c3, col_c4 = st.columns(4)
-        with col_c1: residencias = st.number_input("Residências", min_value=0, step=1)
-        with col_c2: outros = st.number_input("Outros", min_value=0, step=1)
-        with col_c3: tb = st.number_input("TB", min_value=0, step=1)
-        with col_c4: comercio = st.number_input("Comércio", min_value=0, step=1)
+        with col_c1: 
+            residencias = st.number_input("Residências", min_value=0, step=1)
+        with col_c2: 
+            outros = st.number_input("Outros", min_value=0, step=1)
+        with col_c3: 
+            tb = st.number_input("TB", min_value=0, step=1)
+        with col_c4: 
+            comercio = st.number_input("Comércio", min_value=0, step=1)
 
         submitted_rec = st.form_submit_button("💾 Salvar Reconhecimento")
         if submitted_rec:
@@ -312,5 +313,3 @@ with aba_backup:
                 st.success("✅ Backup restaurado com sucesso! Atualize a página.")
             except Exception as e:
                 st.error(f"❌ Erro ao restaurar o backup: {e}")
-
-

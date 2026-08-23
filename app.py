@@ -78,7 +78,7 @@ with aba_cadastro:
             else:
                 novo_registro = {
                     "Data": data_visita.strftime("%d/%m/%Y"),
-                    "Quarteirao": str(num_quarteirao).strip(),
+                    "Quarteirao": str(num_quarteirao).strip().upper(),
                     "Lado": int(lado),
                     "Rua": nome_rua,
                     "Casa": str(num_casa), 
@@ -149,19 +149,20 @@ with aba_reconhecimento:
             else:
                 total = residencias + outros + tb + comercio
                 novo_reconhecimento = {
-                    "Quarteirao": str(quarteirao_rec).strip(),
+                    "Quarteirao": str(quarteirao_rec).strip().upper(),
                     "Lado": int(lado_rec),
                     "Residencias": residencias,
                     "Outros": outros,
                     "TB": tb,
                     "Comercio": comercio,
-                    "Total": total,
+                    "Total Planejado": total,
                     "Data Registro": data_rec.strftime("%d/%m/%Y"),
                     "Auditor": auditor,
                 }
                 st.session_state.reconhecimento.append(novo_reconhecimento)
                 st.success("✅ Reconhecimento cadastrado com sucesso!")
 
+    # Exibição e Cruzamento dos Dados de Reconhecimento
     if st.session_state.reconhecimento:
         st.write("---")
         st.subheader("📈 Cruzamento: Planejado (Reconhecimento) x Realizado (Diário)")
@@ -170,19 +171,28 @@ with aba_reconhecimento:
         
         if st.session_state.vistorias:
             df_vist = pd.DataFrame(st.session_state.vistorias)
-            df_vist_resumo = df_vist.pivot_table(
-                index="Quarteirao", 
-                columns="Vistoria", 
-                values="Casa", 
-                aggfunc="count", 
-                fill_value=0
-            ).reset_index()
             
-            df_integrado = pd.merge(df_recon, df_vist_resumo, on="Quarteirao", how="left").fillna(0)
+            # Agrupa as vistorias realizadas por quarteirão contando o total de imóveis visitados
+            df_vist_resumo = df_vist.groupby("Quarteirao").size().reset_index(name="Total Realizado")
+            
+            # Faz o merge garantindo que os quarteirões coincidam
+            df_integrado = pd.merge(df_recon, df_vist_resumo, on="Quarteirao", how="left").fillna({"Total Realizado": 0})
+            df_integrado["Total Realizado"] = df_integrado["Total Realizado"].astype(int)
+            
+            # Calcula o percentual de cobertura alcançado
+            df_integrado["% Cobertura"] = ((df_integrado["Total Realizado"] / df_integrado["Total Planejado"]) * 100).round(1)
+            df_integrado["% Cobertura"] = df_integrado["% Cobertura"].astype(str) + "%"
+            
             st.dataframe(df_integrado, use_container_width=True)
         else:
-            st.info("ℹ️ Cadastre dados no 'Relatório Diário' para habilitar o cruzamento automático por quarteirão.")
+            st.info("ℹ️ Cadastre dados no 'Relatório Diário' para habilitar o cruzamento automático de progresso por quarteirão.")
             st.dataframe(df_recon, use_container_width=True)
+            
+        with st.expander("👁️ Ver Registros Brutos de Reconhecimento", expanded=False):
+            st.dataframe(df_recon, use_container_width=True)
+            if st.button("🗑️ Limpar Todos os Registros de Reconhecimento"):
+                st.session_state.reconhecimento = []
+                st.rerun()
 
 # ==================== ABA 3: CASAS FECHADAS / RECUSA ====================
 with aba_fechadas:
@@ -191,13 +201,11 @@ with aba_fechadas:
 
     if st.session_state.vistorias:
         df_vistorias = pd.DataFrame(st.session_state.vistorias)
-        # Filtra apenas os registros marcados como Fechada / Recusa
         df_fechadas = df_vistorias[df_vistorias["Vistoria"] == "Fechada / Recusa"]
 
         if not df_fechadas.empty:
             st.warning(f"⚠️ Foram encontrados **{len(df_fechadas)}** imóveis fechados ou com recusa pendentes de recuperação.")
             
-            # Filtro opcional por quarteirão
             quart_filtro = st.selectbox("Filtrar por Quarteirão (Opcional)", ["Todos"] + list(df_fechadas["Quarteirao"].unique()))
             if quart_filtro != "Todos":
                 df_fechadas = df_fechadas[df_fechadas["Quarteirao"] == quart_filtro]
@@ -207,7 +215,6 @@ with aba_fechadas:
                 use_container_width=True
             )
             
-            # Opção de exportar apenas a lista de pendências para facilitar o trabalho de campo
             csv_fechadas = df_fechadas.to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="📥 Baixar Lista de Pendências (CSV)",
@@ -242,7 +249,6 @@ with aba_busca:
         else:
             st.info("Nenhum dado disponível nesta base.")
 
-        # Auditoria mensal e gráficos caso haja reconhecimento
         if st.session_state.reconhecimento:
             st.write("---")
             st.subheader("📈 Auditoria Comparativa Mensal por Quarteirão")
@@ -251,11 +257,11 @@ with aba_busca:
             df_recon_aud["AnoMes"] = df_recon_aud["Data"].dt.to_period("M").astype(str)
 
             df_audit = df_recon_aud.groupby(["AnoMes", "Quarteirao"]).agg({
-                "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total": "sum"
+                "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total Planejado": "sum"
             }).reset_index()
 
             df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
-            df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
+            df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total Planejado"].pct_change() * 100
 
             st.dataframe(df_audit, use_container_width=True)
 
@@ -264,7 +270,7 @@ with aba_busca:
             df_quart_audit = df_audit[df_audit["Quarteirao"] == quart_sel].sort_values("AnoMes")
 
             chart_audit = alt.Chart(
-                df_quart_audit.melt(id_vars=["AnoMes"], value_vars=["Residencias","Outros","TB","Comercio","Total"], var_name="Categoria", value_name="Valor")
+                df_quart_audit.melt(id_vars=["AnoMes"], value_vars=["Residencias","Outros","TB","Comercio","Total Planejado"], var_name="Categoria", value_name="Valor")
             ).mark_line(point=True).encode(
                 x="AnoMes",
                 y="Valor",
@@ -295,10 +301,10 @@ with aba_backup:
                     df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y")
                     df_recon["AnoMes"] = df_recon["Data"].dt.to_period("M").astype(str)
                     df_audit = df_recon.groupby(["AnoMes", "Quarteirao"]).agg({
-                        "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total": "sum"
+                        "Residencias": "sum", "Outros": "sum", "TB": "sum", "Comercio": "sum", "Total Planejado": "sum"
                     }).reset_index()
                     df_audit = df_audit.sort_values(by=["Quarteirao", "AnoMes"])
-                    df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total"].pct_change() * 100
+                    df_audit["Delta_Total"] = df_audit.groupby("Quarteirao")["Total Planejado"].pct_change() * 100
                     df_audit.to_csv(ARQUIVO_AUDITORIA, index=False)
         except Exception as e:
             print(f"Erro no backup automático: {e}")

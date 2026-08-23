@@ -20,10 +20,11 @@ if "reconhecimento" not in st.session_state:
     st.session_state.reconhecimento = []
 
 # ==================== ABAS PRINCIPAIS ====================
-aba_cadastro, aba_busca, aba_backup, aba_reconhecimento = st.tabs(
+aba_cadastro, aba_busca, aba_fechadas, aba_backup, aba_reconhecimento = st.tabs(
     [
         "📝 Relatório Diário",
-        "🔍 Busca Avançada & Recuperação",
+        "🔍 Busca Avançada",
+        "🚪 Imóveis Fechados & Recusas",
         "💾 Central de Backup",
         "📊 Reconhecimento & Auditoria",
     ]
@@ -132,10 +133,8 @@ with aba_cadastro:
         }
 
         st.session_state.vistorias.append(novo_registro)
-        
-        # Reconhecimento automático dinâmico baseado no tipo de imóvel cadastrado
-        # Classifica de forma inteligente para alimentar as tabelas consolidadas
-        tipo_limpo = tipo_imovel.split(" ")[0]
+
+        # Integração automática com Reconhecimento
         res_val, com_val, tb_val, out_val = 0, 0, 0, 0
         if "Residência" in tipo_imovel:
           res_val = 1
@@ -164,7 +163,6 @@ with aba_cadastro:
             " integrado com sucesso!"
         )
 
-  # --- PAINEL DE RESUMO DO DIA ---
   if st.session_state.vistorias:
     st.markdown("---")
     st.subheader("📊 Resumo Operacional Acumulado")
@@ -222,7 +220,66 @@ with aba_busca:
     else:
       st.info("Nenhum dado disponível nesta base.")
   else:
-      st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
+    st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
+
+# ==================== ABA 3: IMÓVEIS FECHADOS & RECUSAS ====================
+with aba_fechadas:
+  st.subheader("🚪 Painel de Imóveis Fechados e Recusas")
+  st.markdown(
+      "Monitore os imóveis que exigem retorno ou ação de recuperação, filtrados"
+      " inteligentemente a partir das vistorias de campo."
+  )
+
+  if st.session_state.vistorias:
+    df_vistorias = pd.DataFrame(st.session_state.vistorias)
+    
+    # Filtro inteligente para capturar imóveis com status Fechada / Recusa
+    df_fechados = df_vistorias[df_vistorias["Vistoria"].str.contains("Fechada", case=False, na=False)]
+
+    # Painel de métricas visuais ilustrativas
+    f1, f2, f3 = st.columns(3)
+    f1.metric("🚪 Total Fechadas / Recusas", len(df_fechados), help="Imóveis que não permitiram acesso")
+    f2.metric("🏘️ Quarteirões Afetados", df_fechados["Quarteirao"].nunique() if not df_fechados.empty else 0)
+    f3.metric("👤 Agentes Envolvidos", df_fechados["Agente"].nunique() if not df_fechados.empty else 0)
+
+    st.markdown("---")
+
+    if not df_fechados.empty:
+      # Filtros inteligentes interativos na própria aba
+      c_filtro1, c_filtro2 = st.columns(2)
+      with c_filtro1:
+        quarteiroes_f = ["Todos"] + list(df_fechados["Quarteirao"].unique())
+        quart_filtro = st.selectbox("Filtrar por Quarteirão", quarteiroes_f)
+      with c_filtro2:
+        agentes_f = ["Todos"] + list(df_fechados["Agente"].unique())
+        agente_filtro = st.selectbox("Filtrar por Agente", agentes_f)
+
+      df_filtrado_fechados = df_fechados.copy()
+      if quart_filtro != "Todos":
+        df_filtrado_fechados = df_filtrado_fechados[df_filtrado_fechados["Quarteirao"] == quart_filtro]
+      if agente_filtro != "Todos":
+        df_filtrado_fechados = df_filtrado_fechados[df_filtrado_fechados["Agente"] == agente_filtro]
+
+      st.markdown("### 📋 Lista Detalhada para Roteiro de Retorno")
+      st.dataframe(df_filtrado_fechados, use_container_width=True)
+
+      # Gráfico ilustrativo de incidência de imóveis fechados por quarteirão
+      st.markdown("### 📊 Incidência por Quarteirão")
+      chart_fechados = (
+          alt.Chart(df_fechados)
+          .mark_bar(color="#e74c3c")
+          .encode(
+              x=alt.X("Quarteirao:N", title="Quarteirão"),
+              y=alt.Y("count():Q", title="Qtd. Fechadas / Recusas"),
+              tooltip=["Quarteirao", "count()"],
+          )
+          .properties(height=350, title="Concentração de Imóveis Fechados")
+      )
+      st.altair_chart(chart_fechados, use_container_width=True)
+    else:
+      st.success("🎉 Excelente! Não há registros de imóveis fechados ou recusas no momento.")
+  else:
+    st.info("ℹ️ Preencha o 'Relatório Diário' para popular o painel inteligente de imóveis fechados.")
 
 # ==================== ABA 4: RECONHECIMENTO & AUDITORIA ====================
 with aba_reconhecimento:
@@ -235,7 +292,6 @@ with aba_reconhecimento:
   if st.session_state.reconhecimento:
     df_recon = pd.DataFrame(st.session_state.reconhecimento)
     
-    # Agrupamento consolidado por quarteirão
     df_consolidado = df_recon.groupby("Quarteirao").agg({
         "Residencias": "sum",
         "Outros": "sum",
@@ -268,7 +324,6 @@ with aba_reconhecimento:
       ).fillna(0)
       st.dataframe(df_integrado, use_container_width=True)
 
-    # Auditoria comparativa por mês
     st.write("---")
     st.subheader("📈 Auditoria Comparativa Mensal")
     df_recon["Data"] = pd.to_datetime(df_recon["Data Registro"], format="%d/%m/%Y", errors="coerce")
@@ -293,7 +348,6 @@ with aba_reconhecimento:
 
     st.dataframe(df_audit, use_container_width=True)
 
-    # Gráfico analítico corrigido
     st.write("---")
     quarteiroes_disponiveis = df_audit["Quarteirao"].unique()
     if len(quarteiroes_disponiveis) > 0:
@@ -326,7 +380,7 @@ with aba_reconhecimento:
   else:
     st.info("ℹ️ Realize registros no 'Relatório Diário' para gerar os dados de reconhecimento e auditoria automaticamente.")
 
-# ==================== ABA 3: BACKUP ROBUSTO EM ZIP ====================
+# ==================== ABA 5: BACKUP ROBUSTO EM ZIP ====================
 with aba_backup:
   st.subheader("🔐 Central de Segurança e Backup Avançado")
 

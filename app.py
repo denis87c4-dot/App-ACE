@@ -178,4 +178,4 @@ with aba_backup:
             try:
                 with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
                     zip_ref.extractall(".")
-                if os
+                if os.path.exists(ARQUIVO_VISTORIAS):

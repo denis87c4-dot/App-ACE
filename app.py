@@ -108,6 +108,12 @@ with aba_cadastro:
           step=1,
       )
 
+      # 🔄 NOVO: Campo de Ciclo (1 a 6)
+      ciclo_selecionado = st.selectbox(
+          "🔄 Ciclo Epidemiológico",
+          ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"],
+      )
+
       opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
       sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
       
@@ -202,6 +208,7 @@ with aba_cadastro:
         novo_registro = {
             "Data": data_visita.strftime("%d/%m/%Y"),
             "Semana": int(num_semana),
+            "Ciclo": ciclo_selecionado,  # <--- Salvando o ciclo
             "Quarteirao": str(num_quarteirao).strip(),
             "Lado": int(lado),
             "Rua": str(nome_rua).strip(),
@@ -269,8 +276,9 @@ with aba_cadastro:
 
     opcoes_registros = {}
     for idx, reg in enumerate(st.session_state.vistorias):
+      ciclo_lbl = reg.get("Ciclo", "Ciclo 1")
       label = (
-          f"#{idx+1} | Data: {reg['Data']} | Quarteirão: {reg['Quarteirao']} | "
+          f"#{idx+1} | {ciclo_lbl} | Data: {reg['Data']} | Quarteirão: {reg['Quarteirao']} | "
           f"Rua: {reg['Rua']} | Casa: {reg['Casa']} | Condição: {reg['Vistoria']}"
       )
       opcoes_registros[label] = idx
@@ -311,14 +319,20 @@ with aba_cadastro:
             
           novo_data_visita = st.date_input("Data da Visita", value=dt_parse, key="edit_dt")
           novo_num_semana = st.number_input("Semana Epidemiológica", min_value=1, max_value=53, value=int(reg_atual.get("Semana", 1)), key="edit_sem")
-          novo_quarteirao = st.text_input("Nº do Quarteirão", value=str(reg_atual["Quarteirao"]), key="edit_quart")
+          
+          ciclos_possiveis = ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"]
+          val_ciclo_atual = reg_atual.get("Ciclo", "Ciclo 1")
+          idx_ciclo = ciclos_possiveis.index(val_ciclo_atual) if val_ciclo_atual in ciclos_possiveis else 0
+          novo_ciclo = st.selectbox("Ciclo Epidemiológico", ciclos_possiveis, index=idx_ciclo, key="edit_ciclo")
 
         with e_col2:
+          novo_quarteirao = st.text_input("Nº do Quarteirão", value=str(reg_atual["Quarteirao"]), key="edit_quart")
           novo_lado = st.number_input("Lado", min_value=1, value=int(reg_atual.get("Lado", 1)), key="edit_lado")
           novo_nome_rua = st.text_input("Nome da Rua", value=str(reg_atual["Rua"]), key="edit_rua")
-          novo_num_casa = st.text_input("Nº / Identificação do Imóvel", value=str(reg_atual["Casa"]), key="edit_casa")
 
         with e_col3:
+          novo_num_casa = st.text_input("Nº / Identificação do Imóvel", value=str(reg_atual["Casa"]), key="edit_casa")
+          
           tipos_possiveis = [
               "Residência (RES)",
               "Comércio (COM)",
@@ -363,6 +377,7 @@ with aba_cadastro:
           st.session_state.vistorias[idx_selecionado] = {
               "Data": novo_data_visita.strftime("%d/%m/%Y"),
               "Semana": int(novo_num_semana),
+              "Ciclo": novo_ciclo,
               "Quarteirao": str(novo_quarteirao).strip(),
               "Lado": int(novo_lado),
               "Rua": str(novo_nome_rua).strip(),
@@ -417,7 +432,7 @@ with aba_cadastro:
 with aba_busca:
     st.subheader("🔍 Busca Avançada e Filtros Globais")
     st.markdown(
-        "Filtre os dados cruzando múltiplos critérios (intervalo de datas, semana epidemiológica, "
+        "Filtre os dados cruzando múltiplos critérios (intervalo de datas, ciclo, semana epidemiológica, "
         "condição da vistoria, tipo de imóvel, agente, quarteirão, rua) ou faça uma busca textual livre."
     )
 
@@ -440,6 +455,10 @@ with aba_busca:
 
             if "Diário" in base_escolhida:
                 df_filtrado = df_base.copy()
+
+                # Garantir que a coluna 'Ciclo' exista mesmo em backups antigos
+                if "Ciclo" not in df_filtrado.columns:
+                    df_filtrado["Ciclo"] = "Ciclo 1"
 
                 # Converter coluna de Data para o formato datetime do Pandas para permitir filtros por período
                 if "Data" in df_filtrado.columns:
@@ -485,43 +504,43 @@ with aba_busca:
                 c_f1, c_f2, c_f3 = st.columns(3)
 
                 with c_f1:
+                    if "Ciclo" in df_filtrado.columns:
+                        ciclos_disponiveis = ["Todos"] + sorted(list(df_filtrado["Ciclo"].dropna().unique()))
+                        filtro_ciclo = st.selectbox("Ciclo Epidemiológico", ciclos_disponiveis, key="filtro_avancado_ciclo")
+                        if filtro_ciclo != "Todos":
+                            df_filtrado = df_filtrado[df_filtrado["Ciclo"] == filtro_ciclo]
+
                     if "Vistoria" in df_filtrado.columns:
                         condicoes_disponiveis = ["Todas"] + sorted(list(df_filtrado["Vistoria"].dropna().unique()))
                         filtro_vistoria = st.selectbox("Condição da Vistoria", condicoes_disponiveis, key="filtro_avancado_vistoria")
                         if filtro_vistoria != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Vistoria"] == filtro_vistoria]
 
+                with c_f2:
                     if "Tipo Imovel" in df_filtrado.columns:
                         tipos_disponiveis = ["Todos"] + sorted(list(df_filtrado["Tipo Imovel"].dropna().unique()))
                         filtro_tipo = st.selectbox("Tipo de Imóvel", tipos_disponiveis, key="filtro_avancado_tipo")
-                        if filtro_tipo != "Todas":
+                        if filtro_tipo != "Todos":
                             df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"] == filtro_tipo]
 
-                with c_f2:
                     if "Semana" in df_filtrado.columns:
                         semanas_disponiveis = ["Todas"] + sorted(list(df_filtrado["Semana"].unique()))
                         filtro_semana = st.selectbox("Semana Epidemiológica", semanas_disponiveis, key="filtro_avancado_semana")
                         if filtro_semana != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Semana"] == int(filtro_semana)]
 
+                with c_f3:
                     if "Agente" in df_filtrado.columns:
                         agentes_disponiveis = ["Todos"] + sorted(list(df_filtrado["Agente"].dropna().unique()))
                         filtro_agente = st.selectbox("Agente Responsável", agentes_disponiveis, key="filtro_avancado_agente")
                         if filtro_agente != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Agente"] == filtro_agente]
 
-                with c_f3:
                     if "Quarteirao" in df_filtrado.columns:
                         quarts_disponiveis = ["Todos"] + sorted(list(df_filtrado["Quarteirao"].dropna().astype(str).unique()))
                         filtro_quart = st.selectbox("Quarteirão", quarts_disponiveis, key="filtro_avancado_quart")
-                        if filtro_quart != "Todas":
+                        if filtro_quart != "Todos":
                             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].astype(str) == filtro_quart]
-
-                    if "Rua" in df_filtrado.columns:
-                        ruas_disponiveis = ["Todas"] + sorted(list(df_filtrado["Rua"].dropna().astype(str).unique()))
-                        filtro_rua = st.selectbox("Rua / Logradouro", ruas_disponiveis, key="filtro_avancado_rua")
-                        if filtro_rua != "Todas":
-                            df_filtrado = df_filtrado[df_filtrado["Rua"].astype(str) == filtro_rua]
 
                 # Remover coluna auxiliar de data para exibição limpa da tabela
                 if "Data_dt" in df_filtrado.columns:
@@ -946,6 +965,11 @@ with aba_backup:
 
           if os.path.exists(ARQUIVO_VISTORIAS):
             df_v = pd.read_csv(ARQUIVO_VISTORIAS)
+            
+            # 🛡️ PROTEÇÃO CONTRA ERRO: Se o backup antigo não tiver a coluna 'Ciclo', nós a criamos automaticamente!
+            if "Ciclo" not in df_v.columns:
+              df_v["Ciclo"] = "Ciclo 1"
+
             st.session_state.vistorias = df_v.to_dict("records")
             dados_carregados = True
 
@@ -957,7 +981,7 @@ with aba_backup:
           if dados_carregados:
             st.success(
                 "✅ Sucesso absoluto! Seus dados foram recarregados para a"
-                " memória. Atualizando tela..."
+                " memória (incluindo adaptação automática para backups antigos). Atualizando tela..."
             )
             st.rerun()
           else:

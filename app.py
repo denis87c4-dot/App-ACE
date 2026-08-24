@@ -417,8 +417,8 @@ with aba_cadastro:
 with aba_busca:
     st.subheader("🔍 Busca Avançada e Filtros Globais")
     st.markdown(
-        "Filtre os dados cruzando múltiplos critérios (condição da vistoria, tipo de imóvel, "
-        "semana epidemiológica, agente, quarteirão, rua) ou faça uma busca textual livre."
+        "Filtre os dados cruzando múltiplos critérios (intervalo de datas, semana epidemiológica, "
+        "condição da vistoria, tipo de imóvel, agente, quarteirão, rua) ou faça uma busca textual livre."
     )
 
     if st.session_state.vistorias or st.session_state.reconhecimento:
@@ -441,9 +441,47 @@ with aba_busca:
             if "Diário" in base_escolhida:
                 df_filtrado = df_base.copy()
 
+                # Converter coluna de Data para o formato datetime do Pandas para permitir filtros por período
+                if "Data" in df_filtrado.columns:
+                    df_filtrado["Data_dt"] = pd.to_datetime(df_filtrado["Data"], format="%d/%m/%Y", errors="coerce")
+
                 if "Semana" in df_filtrado.columns:
                     df_filtrado["Semana"] = pd.to_numeric(df_filtrado["Semana"], errors="coerce").fillna(1).astype(int)
 
+                # Seção de Filtro por Data (Opção de Data Única ou Período)
+                if "Data_dt" in df_filtrado.columns and not df_filtrado["Data_dt"].isna().all():
+                    st.markdown("📅 **Filtro por Período / Data da Visita**")
+                    tipo_filtro_data = st.radio(
+                        "Modo de Filtro de Data",
+                        ["Todas as Datas", "Data Específica", "Intervalo de Datas (De - Até)"],
+                        horizontal=True,
+                        key="radio_modo_data"
+                    )
+
+                    if tipo_filtro_data == "Data Específica":
+                        min_d = df_filtrado["Data_dt"].min().date()
+                        max_d = df_filtrado["Data_dt"].max().date()
+                        data_especifica = st.date_input("Selecione a Data Exata", value=min_d, min_value=min_d, max_value=max_d, key="filtro_data_unica")
+                        df_filtrado = df_filtrado[df_filtrado["Data_dt"].dt.date == data_especifica]
+
+                    elif tipo_filtro_data == "Intervalo de Datas (De - Até)":
+                        min_d = df_filtrado["Data_dt"].min().date()
+                        max_d = df_filtrado["Data_dt"].max().date()
+                        intervalo_datas = st.date_input(
+                            "Selecione o Intervalo (Início e Fim)",
+                            value=(min_d, max_d),
+                            min_value=min_d,
+                            max_value=max_d,
+                            key="filtro_intervalo_datas"
+                        )
+                        if isinstance(intervalo_datas, tuple) and len(intervalo_datas) == 2:
+                            inicio_dt, fim_dt = intervalo_datas
+                            df_filtrado = df_filtrado[
+                                (df_filtrado["Data_dt"].dt.date >= inicio_dt) & 
+                                (df_filtrado["Data_dt"].dt.date <= fim_dt)
+                            ]
+
+                st.markdown("---")
                 c_f1, c_f2, c_f3 = st.columns(3)
 
                 with c_f1:
@@ -456,7 +494,7 @@ with aba_busca:
                     if "Tipo Imovel" in df_filtrado.columns:
                         tipos_disponiveis = ["Todos"] + sorted(list(df_filtrado["Tipo Imovel"].dropna().unique()))
                         filtro_tipo = st.selectbox("Tipo de Imóvel", tipos_disponiveis, key="filtro_avancado_tipo")
-                        if filtro_tipo != "Todos":
+                        if filtro_tipo != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"] == filtro_tipo]
 
                 with c_f2:
@@ -476,7 +514,7 @@ with aba_busca:
                     if "Quarteirao" in df_filtrado.columns:
                         quarts_disponiveis = ["Todos"] + sorted(list(df_filtrado["Quarteirao"].dropna().astype(str).unique()))
                         filtro_quart = st.selectbox("Quarteirão", quarts_disponiveis, key="filtro_avancado_quart")
-                        if filtro_quart != "Todos":
+                        if filtro_quart != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].astype(str) == filtro_quart]
 
                     if "Rua" in df_filtrado.columns:
@@ -484,6 +522,10 @@ with aba_busca:
                         filtro_rua = st.selectbox("Rua / Logradouro", ruas_disponiveis, key="filtro_avancado_rua")
                         if filtro_rua != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Rua"].astype(str) == filtro_rua]
+
+                # Remover coluna auxiliar de data para exibição limpa da tabela
+                if "Data_dt" in df_filtrado.columns:
+                    df_filtrado = df_filtrado.drop(columns=["Data_dt"])
 
                 st.markdown("---")
                 termo_livre = st.text_input(

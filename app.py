@@ -94,14 +94,12 @@ with aba_cadastro:
           step=1,
       )
 
-      # Dropdown inteligente para Quarteirão (permite selecionar ou digitar novo)
       q_options = [""] + sorted(historico_quart)
       num_quarteirao = st.selectbox(
           "Nº do Quarteirão",
           options=q_options,
-          help="Selecione um quarteirão anterior ou digite direto no campo se preferir",
+          help="Selecione um quarteirão anterior ou digite direto no campo",
       )
-      # Fallback criativo: se quiser digitar livremente caso não esteja na lista
       if not num_quarteirao:
         num_quarteirao = st.text_input(
             "Ou digite o Quarteirão novo", placeholder="Ex: 142B"
@@ -112,7 +110,6 @@ with aba_cadastro:
           "Lado do Quarteirão", min_value=1, value=1, step=1
       )
 
-      # Dropdown inteligente para Rua
       r_options = [""] + sorted(historico_ruas)
       nome_rua = st.selectbox(
           "Nome da Rua / Logradouro",
@@ -145,7 +142,6 @@ with aba_cadastro:
           "Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"]
       )
 
-      # Dropdown inteligente para Agente
       a_options = [""] + sorted(historico_agentes)
       agente_resp = st.selectbox("Agente Responsável", options=a_options)
       if not agente_resp:
@@ -225,8 +221,7 @@ with aba_cadastro:
         st.session_state.reconhecimento.append(registro_rec)
 
         st.success(
-            f"✅ Imóvel **{num_casa}** (Semana {num_semana}, Rua {nome_rua})"
-            " salvo com sucesso! Os campos principais foram mantidos para o"
+            f"✅ Imóvel **{num_casa}** salvo com sucesso! Pronta para o"
             " próximo."
         )
         st.rerun()
@@ -242,6 +237,41 @@ with aba_cadastro:
     m3.metric("Tubitos Coletados", int(df_v["Tubitos"].sum()))
     m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
+
+    # ==================== GERENCIADOR / EXCLUSÃO DE LANÇAMENTOS ====================
+    st.markdown("---")
+    st.subheader("🗑️ Gerenciar ou Excluir Lançamento Recente")
+    st.markdown(
+        "Se você se enganou ou duplicou algum lançamento, selecione o item na"
+        " lista abaixo para removê-lo instantaneamente."
+    )
+
+    # Criação de um rótulo amigável para identificar o registro no selectbox
+    opcoes_registros = {}
+    for idx, reg in enumerate(st.session_state.vistorias):
+      label = (
+          f"#{idx+1} | Quarteirão: {reg['Quarteirao']} | Rua: {reg['Rua']} |"
+          f" Casa: {reg['Casa']} | Data: {reg['Data']}"
+      )
+      opcoes_registros[label] = idx
+
+    col_del1, col_del2 = st.columns([3, 1])
+    with col_del1:
+      registro_selecionado_para_excluir = st.selectbox(
+          "Selecione o registro para excluir",
+          options=list(opcoes_registros.keys()),
+          label_visibility="collapsed",
+      )
+    with col_del2:
+      if st.button("🗑️ Excluir Selecionado", use_container_width=True):
+        idx_remover = opcoes_registros[registro_selecionado_para_excluir]
+        # Remove da lista de vistorias
+        st.session_state.vistorias.pop(idx_remover)
+        # Tenta remover também correspondente no reconhecimento se houver
+        if st.session_state.reconhecimento and idx_remover < len(st.session_state.reconhecimento):
+          st.session_state.reconhecimento.pop(idx_remover)
+        st.success("✅ Registro excluído com sucesso!")
+        st.rerun()
 
     with st.expander("👁️ Ver Todos os Registros Diários na Sessão", expanded=False):
       st.dataframe(df_v, use_container_width=True)

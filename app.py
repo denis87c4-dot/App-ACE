@@ -41,39 +41,53 @@ with aba_cadastro:
   st.subheader("📋 Relatório Diário de Campo (Modo Rápido)")
   st.markdown(
       "⚡ **Modo de Campo Agilizado:** O sistema memoriza seus últimos dados"
-      " preenchidos (data, semana, quarteirão, rua e agente). Ao salvar, apenas"
-      " o número da casa é limpo para a próxima vistoria!"
+      " preenchidos. Ao salvar, apenas o número da casa é limpo para a próxima"
+      " vistoria!"
   )
 
-  # Extração de listas históricas para os dropdowns inteligentes
+  # Extração segura de listas históricas para os dropdowns
   historico_quart = (
-      list(
-          set(
-              [
-                  str(v["Quarteirao"])
-                  for v in st.session_state.vistorias
-                  if "Quarteirao" in v
-              ]
+      sorted(
+          list(
+              set(
+                  [
+                      str(v["Quarteirao"])
+                      for v in st.session_state.vistorias
+                      if "Quarteirao" in v and v["Quarteirao"]
+                  ]
+              )
           )
       )
       if st.session_state.vistorias
       else []
   )
+
   historico_ruas = (
-      list(
-          set([v["Rua"] for v in st.session_state.vistorias if "Rua" in v])
+      sorted(
+          list(
+              set(
+                  [
+                      str(v["Rua"])
+                      for v in st.session_state.vistorias
+                      if "Rua" in v and v["Rua"]
+                  ]
+              )
+          )
       )
       if st.session_state.vistorias
       else []
   )
+
   historico_agentes = (
-      list(
-          set(
-              [
-                  v["Agente"]
-                  for v in st.session_state.vistorias
-                  if "Agente" in v and v["Agente"]
-              ]
+      sorted(
+          list(
+              set(
+                  [
+                      str(v["Agente"])
+                      for v in st.session_state.vistorias
+                      if "Agente" in v and v["Agente"]
+                  ]
+              )
           )
       )
       if st.session_state.vistorias
@@ -94,15 +108,19 @@ with aba_cadastro:
           step=1,
       )
 
-      q_options = [""] + sorted(historico_quart)
-      num_quarteirao = st.selectbox(
-          "Nº do Quarteirão",
-          options=q_options,
-          help="Selecione um quarteirão anterior ou digite direto no campo",
-      )
-      if not num_quarteirao:
+      # Quarteirão: Seleção inteligente com suporte a novo valor
+      if historico_quart:
+        opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
+        sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q)
+        if sel_q == "➕ Digitar novo quarteirão...":
+          num_quarteirao = st.text_input(
+              "Digite o Novo Quarteirão", placeholder="Ex: 142B"
+          )
+        else:
+          num_quarteirao = sel_q
+      else:
         num_quarteirao = st.text_input(
-            "Ou digite o Quarteirão novo", placeholder="Ex: 142B"
+            "Nº do Quarteirão", placeholder="Ex: 142B"
         )
 
     with col2:
@@ -110,14 +128,20 @@ with aba_cadastro:
           "Lado do Quarteirão", min_value=1, value=1, step=1
       )
 
-      r_options = [""] + sorted(historico_ruas)
-      nome_rua = st.selectbox(
-          "Nome da Rua / Logradouro",
-          options=r_options,
-          help="Selecione uma rua recente ou digite",
-      )
-      if not nome_rua:
-        nome_rua = st.text_input("Ou digite a Rua nova", placeholder="Ex: Rua das Flores")
+      # Rua: Seleção inteligente com suporte a nova rua garantido
+      if historico_ruas:
+        opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
+        sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r)
+        if sel_r == "➕ Digitar nova rua...":
+          nome_rua = st.text_input(
+              "Digite a Nova Rua", placeholder="Ex: Rua das Flores"
+          )
+        else:
+          nome_rua = sel_r
+      else:
+        nome_rua = st.text_input(
+            "Nome da Rua / Logradouro", placeholder="Ex: Rua das Flores"
+        )
 
       num_casa = st.text_input(
           "Nº / Identificação do Imóvel",
@@ -142,10 +166,20 @@ with aba_cadastro:
           "Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"]
       )
 
-      a_options = [""] + sorted(historico_agentes)
-      agente_resp = st.selectbox("Agente Responsável", options=a_options)
-      if not agente_resp:
-        agente_resp = st.text_input("Ou digite o Agente novo", placeholder="Ex: Denison")
+      # Agente: Seleção inteligente com suporte a novo valor
+      if historico_agentes:
+        opcoes_a = historico_agentes + ["➕ Digitar novo agente..."]
+        sel_a = st.selectbox("Agente Responsável", options=opcoes_a)
+        if sel_a == "➕ Digitar novo agente...":
+          agente_resp = st.text_input(
+              "Digite o Nome do Agente", placeholder="Ex: Denison"
+          )
+        else:
+          agente_resp = sel_a
+      else:
+        agente_resp = st.text_input(
+            "Agente Responsável", placeholder="Ex: Denison"
+        )
 
     st.markdown("---")
     st.subheader("🔬 Dados Entomológicos e Tratamento")
@@ -159,11 +193,15 @@ with aba_cadastro:
     with c3:
       imoveis_tratados = st.number_input("Tratados", min_value=0, value=0)
     with c4:
-      gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=0.0)
+      gramas = st.number_input(
+          "Gramas (g)", min_value=0.0, format="%.1f", value=0.0
+      )
     with c5:
       depositos = st.number_input("Depósitos", min_value=0, value=0)
     with c6:
-      litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=0.0)
+      litros = st.number_input(
+          "Litros (L)", min_value=0.0, format="%.1f", value=0.0
+      )
 
     submitted = st.form_submit_button(
         "💾 Salvar Registro Diário", use_container_width=True
@@ -181,12 +219,12 @@ with aba_cadastro:
             "Semana": int(num_semana),
             "Quarteirao": str(num_quarteirao).strip(),
             "Lado": int(lado),
-            "Rua": nome_rua,
-            "Casa": str(num_casa),
+            "Rua": str(nome_rua).strip(),
+            "Casa": str(num_casa).strip(),
             "Tipo Imovel": tipo_imovel,
             "Hora": hora_entrada.strftime("%H:%M"),
             "Vistoria": vistoria,
-            "Agente": agente_resp,
+            "Agente": str(agente_resp).strip(),
             "Eliminados": int(eliminados),
             "Tubitos": int(tubitos),
             "Tratados": int(imoveis_tratados),
@@ -221,8 +259,8 @@ with aba_cadastro:
         st.session_state.reconhecimento.append(registro_rec)
 
         st.success(
-            f"✅ Imóvel **{num_casa}** salvo com sucesso! Pronta para o"
-            " próximo."
+            f"✅ Imóvel **{num_casa}** na rua **{nome_rua}** salvo com"
+            " sucesso!"
         )
         st.rerun()
 
@@ -238,7 +276,6 @@ with aba_cadastro:
     m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
-    # ==================== GERENCIADOR / EXCLUSÃO DE LANÇAMENTOS ====================
     st.markdown("---")
     st.subheader("🗑️ Gerenciar ou Excluir Lançamento Recente")
     st.markdown(
@@ -246,7 +283,6 @@ with aba_cadastro:
         " lista abaixo para removê-lo instantaneamente."
     )
 
-    # Criação de um rótulo amigável para identificar o registro no selectbox
     opcoes_registros = {}
     for idx, reg in enumerate(st.session_state.vistorias):
       label = (
@@ -265,10 +301,10 @@ with aba_cadastro:
     with col_del2:
       if st.button("🗑️ Excluir Selecionado", use_container_width=True):
         idx_remover = opcoes_registros[registro_selecionado_para_excluir]
-        # Remove da lista de vistorias
         st.session_state.vistorias.pop(idx_remover)
-        # Tenta remover também correspondente no reconhecimento se houver
-        if st.session_state.reconhecimento and idx_remover < len(st.session_state.reconhecimento):
+        if st.session_state.reconhecimento and idx_remover < len(
+            st.session_state.reconhecimento
+        ):
           st.session_state.reconhecimento.pop(idx_remover)
         st.success("✅ Registro excluído com sucesso!")
         st.rerun()
@@ -480,7 +516,7 @@ with aba_semanal:
         " dados consolidados aqui."
     )
 
-# ==================== ABA 5: RECONHECIMIENTO & AUDITORIA ====================
+# ==================== ABA 5: RECONHECIMENTO & AUDITORIA ====================
 with aba_reconhecimento:
   st.subheader("📊 Painel de Reconhecimento Geográfico & Auditoria")
   st.markdown(

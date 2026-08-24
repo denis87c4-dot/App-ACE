@@ -108,7 +108,6 @@ with aba_cadastro:
           step=1,
       )
 
-      # Quarteirão: Agora sempre exibe a opção de digitar novo quarteirão perfeitamente
       opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
       sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
       
@@ -124,7 +123,6 @@ with aba_cadastro:
           "Lado do Quarteirão", min_value=1, value=1, step=1
       )
 
-      # Rua: Com chave única para manter estado e exibição garantida
       opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
       sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r, key="select_rua")
       
@@ -158,7 +156,6 @@ with aba_cadastro:
           "Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"]
       )
 
-      # Agente: Com chave única para manter estado e exibição garantida
       opcoes_a = historico_agentes + ["➕ Digitar novo agente..."]
       sel_a = st.selectbox("Agente Responsável", options=opcoes_a, key="select_agente")
       
@@ -265,10 +262,9 @@ with aba_cadastro:
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
     st.markdown("---")
-    st.subheader("🗑️ Gerenciar ou Excluir Lançamento Recente")
+    st.subheader("✏️ Gerenciar, Editar ou Excluir Lançamentos")
     st.markdown(
-        "Se você se enganou ou duplicou algum lançamento, selecione o item na"
-        " lista abaixo para removê-lo instantaneamente."
+        "Selecione um lançamento abaixo para modificá-lo ou excluí-lo individualmente."
     )
 
     opcoes_registros = {}
@@ -279,23 +275,137 @@ with aba_cadastro:
       )
       opcoes_registros[label] = idx
 
-    col_del1, col_del2 = st.columns([3, 1])
-    with col_del1:
-      registro_selecionado_para_excluir = st.selectbox(
-          "Selecione o registro para excluir",
-          options=list(opcoes_registros.keys()),
-          label_visibility="collapsed",
-      )
-    with col_del2:
-      if st.button("🗑️ Excluir Selecionado", use_container_width=True):
-        idx_remover = opcoes_registros[registro_selecionado_para_excluir]
-        st.session_state.vistorias.pop(idx_remover)
-        if st.session_state.reconhecimento and idx_remover < len(
+    registro_selecionado = st.selectbox(
+        "Selecione o registro para gerenciar",
+        options=list(opcoes_registros.keys()),
+    )
+    idx_selecionado = opcoes_registros[registro_selecionado]
+    reg_atual = st.session_state.vistorias[idx_selecionado]
+
+    col_acao1, col_acao2 = st.columns(2)
+
+    with col_acao1:
+      if st.button("🗑️ Excluir Este Registro", use_container_width=True, type="secondary"):
+        st.session_state.vistorias.pop(idx_selecionado)
+        if st.session_state.reconhecimento and idx_selecionado < len(
             st.session_state.reconhecimento
         ):
-          st.session_state.reconhecimento.pop(idx_remover)
+          st.session_state.reconhecimento.pop(idx_selecionado)
         st.success("✅ Registro excluído com sucesso!")
         st.rerun()
+
+    with col_acao2:
+      editar_toggle = st.toggle("✏️ Abrir modo de edição para este item")
+
+    if editar_toggle:
+      st.markdown("#### 📝 Editando Registro Selecionado")
+      with st.form(f"form_edicao_{idx_selecionado}"):
+        e_col1, e_col2, e_col3 = st.columns(3)
+
+        with e_col1:
+          # Tentar converter a data salva ou usar o dia de hoje caso haja erro
+          try:
+            dt_parse = datetime.strptime(reg_atual["Data"], "%d/%m/%Y").date()
+          except:
+            dt_parse = datetime.today()
+            
+          novo_data_visita = st.date_input("Data da Visita", value=dt_parse)
+          novo_num_semana = st.number_input("Semana Epidemiológica", min_value=1, max_value=53, value=int(reg_atual.get("Semana", 1)))
+          novo_quarteirao = st.text_input("Nº do Quarteirão", value=str(reg_atual["Quarteirao"]))
+
+        with e_col2:
+          novo_lado = st.number_input("Lado", min_value=1, value=int(reg_atual.get("Lado", 1)))
+          novo_nome_rua = st.text_input("Nome da Rua", value=str(reg_atual["Rua"]))
+          novo_num_casa = st.text_input("Nº / Identificação do Imóvel", value=str(reg_atual["Casa"]))
+
+        with e_col3:
+          tipos_possiveis = [
+              "Residência (RES)",
+              "Comércio (COM)",
+              "Terreno Baldio (TB)",
+              "Ponto Estratégico (PE)",
+              "Outros (OUT)",
+          ]
+          idx_tipo = tipos_possiveis.index(reg_atual["Tipo Imovel"]) if reg_atual["Tipo Imovel"] in tipos_possiveis else 0
+          novo_tipo_imovel = st.selectbox("Tipo de Imóvel", tipos_possiveis, index=idx_tipo)
+          
+          try:
+            hr_parse = datetime.strptime(reg_atual["Hora"], "%H:%M").time()
+          except:
+            hr_parse = datetime.now().time()
+          novo_hora_entrada = st.time_input("Hora de Entrada", value=hr_parse)
+
+          condicoes_possiveis = ["Normal", "Recuperada", "Fechada / Recusa"]
+          idx_vist = condicoes_possiveis.index(reg_atual["Vistoria"]) if reg_atual["Vistoria"] in condicoes_possiveis else 0
+          novo_vistoria = st.selectbox("Condição da Vistoria", condicoes_possiveis, index=idx_vist)
+          novo_agente_resp = st.text_input("Agente Responsável", value=str(reg_atual["Agente"]))
+
+        st.markdown("---")
+        st.subheader("🔬 Dados Entomológicos e Tratamento (Edição)")
+        ec1, ec2, ec3, ec4, ec5, ec6 = st.columns(6)
+
+        with ec1:
+          novo_eliminados = st.number_input("Eliminados", min_value=0, value=int(reg_atual.get("Eliminados", 0)))
+        with ec2:
+          novo_tubitos = st.number_input("Tubitos", min_value=0, value=int(reg_atual.get("Tubitos", 0)))
+        with ec3:
+          novo_imoveis_tratados = st.number_input("Tratados", min_value=0, value=int(reg_atual.get("Tratados", 0)))
+        with ec4:
+          novo_gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=float(reg_atual.get("Gramas", 0.0)))
+        with ec5:
+          novo_depositos = st.number_input("Depósitos", min_value=0, value=int(reg_atual.get("Depósitos", 0)))
+        with ec6:
+          novo_litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=float(reg_atual.get("Litros", 0.0)))
+
+        salvar_edicao = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
+
+        if salvar_edicao:
+          # Atualiza os dados na sessão
+          st.session_state.vistorias[idx_selecionado] = {
+              "Data": novo_data_visita.strftime("%d/%m/%Y"),
+              "Semana": int(novo_num_semana),
+              "Quarteirao": str(novo_quarteirao).strip(),
+              "Lado": int(novo_lado),
+              "Rua": str(novo_nome_rua).strip(),
+              "Casa": str(novo_num_casa).strip(),
+              "Tipo Imovel": novo_tipo_imovel,
+              "Hora": novo_hora_entrada.strftime("%H:%M"),
+              "Vistoria": novo_vistoria,
+              "Agente": str(novo_agente_resp).strip(),
+              "Eliminados": int(novo_eliminados),
+              "Tubitos": int(novo_tubitos),
+              "Tratados": int(novo_imoveis_tratados),
+              "Gramas": float(novo_gramas),
+              "Depósitos": int(novo_depositos),
+              "Litros": float(novo_litros),
+          }
+
+          # Atualiza também no reconhecimento se existir correspondência
+          if idx_selecionado < len(st.session_state.reconhecimento):
+            res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+            if "Residência" in novo_tipo_imovel:
+              res_val = 1
+            elif "Comércio" in novo_tipo_imovel:
+              com_val = 1
+            elif "Terreno" in novo_tipo_imovel:
+              tb_val = 1
+            else:
+              out_val = 1
+
+            st.session_state.reconhecimento[idx_selecionado] = {
+                "Quarteirao": str(novo_quarteirao).strip(),
+                "Lado": int(novo_lado),
+                "Residencias": res_val,
+                "Outros": out_val,
+                "TB": tb_val,
+                "Comercio": com_val,
+                "Total": 1,
+                "Data Registro": novo_data_visita.strftime("%d/%m/%Y"),
+                "Auditor": novo_agente_resp if novo_agente_resp else "Geral",
+            }
+
+          st.success("✅ Registro atualizado com sucesso!")
+          st.rerun()
 
     with st.expander("👁️ Ver Todos os Registros Diários na Sessão", expanded=False):
       st.dataframe(df_v, use_container_width=True)
@@ -504,7 +614,7 @@ with aba_semanal:
         " dados consolidados aqui."
     )
 
-# ==================== ABA 5: RECONHECIMIENTO & AUDITORIA ====================
+# ==================== ABA 5: RECONHECIMENTO & AUDITORIA ====================
 with aba_reconhecimento:
   st.subheader("📊 Painel de Reconhecimento Geográfico & Auditoria")
   st.markdown(

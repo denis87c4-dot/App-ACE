@@ -108,12 +108,13 @@ with aba_cadastro:
           step=1,
       )
 
-      # Quarteirão: Sempre com suporte a inclusão garantida
+      # Quarteirão: Com chave única para manter estado e exibição garantida
       opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
-      sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q)
+      sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
+      
       if sel_q == "➕ Digitar novo quarteirão..." or not historico_quart:
         num_quarteirao = st.text_input(
-            "Digite o Novo Quarteirão", placeholder="Ex: 142B"
+            "Digite o Novo Quarteirão", placeholder="Ex: 142B", key="input_novo_quarteirao"
         )
       else:
         num_quarteirao = sel_q
@@ -123,12 +124,13 @@ with aba_cadastro:
           "Lado do Quarteirão", min_value=1, value=1, step=1
       )
 
-      # Rua: Sempre com suporte a inclusão garantida
+      # Rua: Com chave única para manter estado e exibição garantida
       opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
-      sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r)
+      sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r, key="select_rua")
+      
       if sel_r == "➕ Digitar nova rua..." or not historico_ruas:
         nome_rua = st.text_input(
-            "Digite a Nova Rua", placeholder="Ex: Rua das Flores"
+            "Digite a Nova Rua", placeholder="Ex: Rua das Flores", key="input_nova_rua"
         )
       else:
         nome_rua = sel_r
@@ -156,12 +158,13 @@ with aba_cadastro:
           "Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"]
       )
 
-      # Agente: Sempre com suporte a inclusão garantida
+      # Agente: Com chave única para manter estado e exibição garantida
       opcoes_a = historico_agentes + ["➕ Digitar novo agente..."]
-      sel_a = st.selectbox("Agente Responsável", options=opcoes_a)
+      sel_a = st.selectbox("Agente Responsável", options=opcoes_a, key="select_agente")
+      
       if sel_a == "➕ Digitar novo agente..." or not historico_agentes:
         agente_resp = st.text_input(
-            "Digite o Nome do Agente", placeholder="Ex: Denison"
+            "Digite o Nome do Agente", placeholder="Ex: Denison", key="input_novo_agente"
         )
       else:
         agente_resp = sel_a
@@ -501,7 +504,7 @@ with aba_semanal:
         " dados consolidados aqui."
     )
 
-# ==================== ABA 5: RECONHECIMIENTO & AUDITORIA ====================
+# ==================== ABA 5: RECONHECIMENTO & AUDITORIA ====================
 with aba_reconhecimento:
   st.subheader("📊 Painel de Reconhecimento Geográfico & Auditoria")
   st.markdown(

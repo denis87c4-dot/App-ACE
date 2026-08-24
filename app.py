@@ -108,7 +108,7 @@ with aba_cadastro:
           step=1,
       )
 
-      # Quarteirão: Com chave única para manter estado e exibição garantida
+      # Quarteirão: Agora sempre exibe a opção de digitar novo quarteirão perfeitamente
       opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
       sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
       
@@ -504,7 +504,7 @@ with aba_semanal:
         " dados consolidados aqui."
     )
 
-# ==================== ABA 5: RECONHECIMENTO & AUDITORIA ====================
+# ==================== ABA 5: RECONHECIMIENTO & AUDITORIA ====================
 with aba_reconhecimento:
   st.subheader("📊 Painel de Reconhecimento Geográfico & Auditoria")
   st.markdown(

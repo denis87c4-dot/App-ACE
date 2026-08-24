@@ -516,7 +516,7 @@ with aba_semanal:
         " dados consolidados aqui."
     )
 
-# ==================== ABA 5: RECONHECIMENTO & AUDITORIA ====================
+# ==================== ABA 5: RECONHECIMIENTO & AUDITORIA ====================
 with aba_reconhecimento:
   st.subheader("📊 Painel de Reconhecimento Geográfico & Auditoria")
   st.markdown(
@@ -624,72 +624,109 @@ with aba_reconhecimento:
         " reconhecimento e auditoria automaticamente."
     )
 
-# ==================== ABA 6: BACKUP ROBUSTO EM ZIP ====================
+# ==================== ABA 6: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
 with aba_backup:
-  st.subheader("🔐 Central de Segurança e Backup Avançado")
+  st.subheader("🔐 Central de Segurança e Recuperação de Dados (.zip)")
+  st.markdown(
+      "Se você perdeu os dados por reiniciar o sistema ou limpar a memória,"
+      " basta carregar o arquivo **ZIP** de backup que você guardou consigo."
+      " Garantimos que seus dados voltarão instantaneamente para todas as"
+      " abas."
+  )
 
   ARQUIVO_VISTORIAS = "vistorias_diarias.csv"
   ARQUIVO_RECONHECIMENTO = "reconhecimento.csv"
 
-
-  def salvar_backup_automatico():
-    try:
-      if "vistorias" in st.session_state and st.session_state.vistorias:
-        pd.DataFrame(st.session_state.vistorias).to_csv(
-            ARQUIVO_VISTORIAS, index=False
-        )
-      if (
-          "reconhecimento" in st.session_state
-          and st.session_state.reconhecimento
-      ):
-        pd.DataFrame(st.session_state.reconhecimento).to_csv(
-            ARQUIVO_RECONHECIMENTO, index=False
-        )
-    except Exception as e:
-      print(f"Erro no backup automático: {e}")
-
-
-  salvar_backup_automatico()
-
   col_b1, col_b2 = st.columns(2)
+
   with col_b1:
-    st.markdown("### 📤 Salvar Backup Completo (.zip)")
+    st.markdown("### 📤 Gerar e Baixar Backup")
+    st.markdown(
+        "Clique abaixo para baixar um pacote `.zip` atualizado com todos os"
+        " seus cadastros atuais."
+    )
+
+    # Prepara arquivos temporários atuais para download se houver dados na sessão
+    if st.session_state.vistorias:
+      pd.DataFrame(st.session_state.vistorias).to_csv(
+          ARQUIVO_VISTORIAS, index=False
+      )
+    if st.session_state.reconhecimento:
+      pd.DataFrame(st.session_state.reconhecimento).to_csv(
+          ARQUIVO_RECONHECIMENTO, index=False
+      )
+
     arquivos_para_backup = [ARQUIVO_VISTORIAS, ARQUIVO_RECONHECIMENTO]
     arquivos_existentes = [f for f in arquivos_para_backup if os.path.exists(f)]
 
-    if arquivos_existentes:
+    if arquivos_existentes and (
+        st.session_state.vistorias or st.session_state.reconhecimento
+    ):
       zip_buffer = io.BytesIO()
       with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         for arq in arquivos_existentes:
           zip_file.write(arq)
       zip_buffer.seek(0)
       st.download_button(
-          label="💾 Baixar Pacote de Backup (.zip)",
+          label="💾 Baixar Meu Pacote ZIP de Segurança",
           data=zip_buffer,
           file_name=f"backup_ace_{datetime.today().strftime('%Y-%m-%d')}.zip",
           mime="application/zip",
+          use_container_width=True,
       )
     else:
-      st.info("⚠️ Nenhum dado cadastrado para exportar.")
+      st.info(
+          "ℹ️ Não há registros ativos na sessão atual para gerar o pacote"
+          " agora."
+      )
 
   with col_b2:
-    st.markdown("### 📥 Restaurar Backup")
-    arquivo_upload = st.file_uploader(
-        "Envie seu arquivo ZIP de backup anterior", type="zip"
+    st.markdown("### 📥 Recarregar Dados via Backup (.zip)")
+    st.markdown(
+        "Se o sistema perdeu os dados, envie seu arquivo ZIP guardado para"
+        " restaurar tudo."
     )
+
+    arquivo_upload = st.file_uploader(
+        "Selecione o seu arquivo .zip de backup", type="zip"
+    )
+
     if arquivo_upload is not None:
-      try:
-        with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
-          zip_ref.extractall(".")
+      st.info(
+          "📁 Arquivo ZIP carregado com sucesso. Clique no botão abaixo para"
+          " processar e aplicar os dados."
+      )
 
-        if os.path.exists(ARQUIVO_VISTORIAS):
-          df_v = pd.read_csv(ARQUIVO_VISTORIAS)
-          st.session_state.vistorias = df_v.to_dict("records")
+      if st.button(
+          "🔄 Confirmar e Recarregar Dados no Sistema",
+          use_container_width=True,
+          type="primary",
+      ):
+        try:
+          with zipfile.ZipFile(arquivo_upload, "r") as zip_ref:
+            zip_ref.extractall(".")
 
-        if os.path.exists(ARQUIVO_RECONHECIMENTO):
-          df_r = pd.read_csv(ARQUIVO_RECONHECIMENTO)
-          st.session_state.reconhecimento = df_r.to_dict("records")
+          dados_carregados = False
 
-        st.success("✅ Backup restaurado com sucesso! Atualize a página.")
-      except Exception as e:
-        st.error(f"❌ Erro ao restaurar o backup: {e}")
+          if os.path.exists(ARQUIVO_VISTORIAS):
+            df_v = pd.read_csv(ARQUIVO_VISTORIAS)
+            st.session_state.vistorias = df_v.to_dict("records")
+            dados_carregados = True
+
+          if os.path.exists(ARQUIVO_RECONHECIMENTO):
+            df_r = pd.read_csv(ARQUIVO_RECONHECIMENTO)
+            st.session_state.reconhecimento = df_r.to_dict("records")
+            dados_carregados = True
+
+          if dados_carregados:
+            st.success(
+                "✅ Sucesso absoluto! Seus dados foram recarregados para a"
+                " memória. Atualizando tela..."
+            )
+            st.rerun()
+          else:
+            st.warning(
+                "⚠️ O arquivo ZIP enviado não continha as tabelas esperadas."
+            )
+        except Exception as e:
+          st.error(f"❌ Erro ao processar o arquivo ZIP: {e}")

@@ -264,20 +264,21 @@ with aba_cadastro:
     st.markdown("---")
     st.subheader("✏️ Gerenciar, Editar ou Excluir Lançamentos")
     st.markdown(
-        "Selecione um lançamento abaixo para modificá-lo ou excluí-lo individualmente."
+        "Selecione um lançamento abaixo para modificá-lo ou excluí-lo individualmente de forma rápida."
     )
 
     opcoes_registros = {}
     for idx, reg in enumerate(st.session_state.vistorias):
       label = (
-          f"#{idx+1} | Quarteirão: {reg['Quarteirao']} | Rua: {reg['Rua']} |"
-          f" Casa: {reg['Casa']} | Data: {reg['Data']}"
+          f"#{idx+1} | Data: {reg['Data']} | Quarteirão: {reg['Quarteirao']} | "
+          f"Rua: {reg['Rua']} | Casa: {reg['Casa']} | Condição: {reg['Vistoria']}"
       )
       opcoes_registros[label] = idx
 
     registro_selecionado = st.selectbox(
         "Selecione o registro para gerenciar",
         options=list(opcoes_registros.keys()),
+        key="select_gerenciar_registro"
     )
     idx_selecionado = opcoes_registros[registro_selecionado]
     reg_atual = st.session_state.vistorias[idx_selecionado]
@@ -295,7 +296,7 @@ with aba_cadastro:
         st.rerun()
 
     with col_acao2:
-      editar_toggle = st.toggle("✏️ Abrir modo de edição para este item")
+      editar_toggle = st.toggle("✏️ Abrir modo de edição rápida para este item", key="toggle_edicao_rapida")
 
     if editar_toggle:
       st.markdown("#### 📝 Editando Registro Selecionado")
@@ -303,20 +304,19 @@ with aba_cadastro:
         e_col1, e_col2, e_col3 = st.columns(3)
 
         with e_col1:
-          # Tentar converter a data salva ou usar o dia de hoje caso haja erro
           try:
             dt_parse = datetime.strptime(reg_atual["Data"], "%d/%m/%Y").date()
           except:
             dt_parse = datetime.today()
             
-          novo_data_visita = st.date_input("Data da Visita", value=dt_parse)
-          novo_num_semana = st.number_input("Semana Epidemiológica", min_value=1, max_value=53, value=int(reg_atual.get("Semana", 1)))
-          novo_quarteirao = st.text_input("Nº do Quarteirão", value=str(reg_atual["Quarteirao"]))
+          novo_data_visita = st.date_input("Data da Visita", value=dt_parse, key="edit_dt")
+          novo_num_semana = st.number_input("Semana Epidemiológica", min_value=1, max_value=53, value=int(reg_atual.get("Semana", 1)), key="edit_sem")
+          novo_quarteirao = st.text_input("Nº do Quarteirão", value=str(reg_atual["Quarteirao"]), key="edit_quart")
 
         with e_col2:
-          novo_lado = st.number_input("Lado", min_value=1, value=int(reg_atual.get("Lado", 1)))
-          novo_nome_rua = st.text_input("Nome da Rua", value=str(reg_atual["Rua"]))
-          novo_num_casa = st.text_input("Nº / Identificação do Imóvel", value=str(reg_atual["Casa"]))
+          novo_lado = st.number_input("Lado", min_value=1, value=int(reg_atual.get("Lado", 1)), key="edit_lado")
+          novo_nome_rua = st.text_input("Nome da Rua", value=str(reg_atual["Rua"]), key="edit_rua")
+          novo_num_casa = st.text_input("Nº / Identificação do Imóvel", value=str(reg_atual["Casa"]), key="edit_casa")
 
         with e_col3:
           tipos_possiveis = [
@@ -327,40 +327,39 @@ with aba_cadastro:
               "Outros (OUT)",
           ]
           idx_tipo = tipos_possiveis.index(reg_atual["Tipo Imovel"]) if reg_atual["Tipo Imovel"] in tipos_possiveis else 0
-          novo_tipo_imovel = st.selectbox("Tipo de Imóvel", tipos_possiveis, index=idx_tipo)
+          novo_tipo_imovel = st.selectbox("Tipo de Imóvel", tipos_possiveis, index=idx_tipo, key="edit_tipo")
           
           try:
             hr_parse = datetime.strptime(reg_atual["Hora"], "%H:%M").time()
           except:
             hr_parse = datetime.now().time()
-          novo_hora_entrada = st.time_input("Hora de Entrada", value=hr_parse)
+          novo_hora_entrada = st.time_input("Hora de Entrada", value=hr_parse, key="edit_hora")
 
           condicoes_possiveis = ["Normal", "Recuperada", "Fechada / Recusa"]
           idx_vist = condicoes_possiveis.index(reg_atual["Vistoria"]) if reg_atual["Vistoria"] in condicoes_possiveis else 0
-          novo_vistoria = st.selectbox("Condição da Vistoria", condicoes_possiveis, index=idx_vist)
-          novo_agente_resp = st.text_input("Agente Responsável", value=str(reg_atual["Agente"]))
+          novo_vistoria = st.selectbox("Condição da Vistoria", condicoes_possiveis, index=idx_vist, key="edit_vist")
+          novo_agente_resp = st.text_input("Agente Responsável", value=str(reg_atual["Agente"]), key="edit_agente")
 
         st.markdown("---")
         st.subheader("🔬 Dados Entomológicos e Tratamento (Edição)")
         ec1, ec2, ec3, ec4, ec5, ec6 = st.columns(6)
 
         with ec1:
-          novo_eliminados = st.number_input("Eliminados", min_value=0, value=int(reg_atual.get("Eliminados", 0)))
+          novo_eliminados = st.number_input("Eliminados", min_value=0, value=int(reg_atual.get("Eliminados", 0)), key="edit_elim")
         with ec2:
-          novo_tubitos = st.number_input("Tubitos", min_value=0, value=int(reg_atual.get("Tubitos", 0)))
+          novo_tubitos = st.number_input("Tubitos", min_value=0, value=int(reg_atual.get("Tubitos", 0)), key="edit_tub")
         with ec3:
-          novo_imoveis_tratados = st.number_input("Tratados", min_value=0, value=int(reg_atual.get("Tratados", 0)))
+          novo_imoveis_tratados = st.number_input("Tratados", min_value=0, value=int(reg_atual.get("Tratados", 0)), key="edit_trat")
         with ec4:
-          novo_gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=float(reg_atual.get("Gramas", 0.0)))
+          novo_gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=float(reg_atual.get("Gramas", 0.0)), key="edit_gram")
         with ec5:
-          novo_depositos = st.number_input("Depósitos", min_value=0, value=int(reg_atual.get("Depósitos", 0)))
+          novo_depositos = st.number_input("Depósitos", min_value=0, value=int(reg_atual.get("Depósitos", 0)), key="edit_dep")
         with ec6:
-          novo_litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=float(reg_atual.get("Litros", 0.0)))
+          novo_litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=float(reg_atual.get("Litros", 0.0)), key="edit_lit")
 
-        salvar_edicao = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
+        salvar_edicao = st.form_submit_button("💾 Salvar Alterações do Registro", use_container_width=True)
 
         if salvar_edicao:
-          # Atualiza os dados na sessão
           st.session_state.vistorias[idx_selecionado] = {
               "Data": novo_data_visita.strftime("%d/%m/%Y"),
               "Semana": int(novo_num_semana),
@@ -380,7 +379,6 @@ with aba_cadastro:
               "Litros": float(novo_litros),
           }
 
-          # Atualiza também no reconhecimento se existir correspondência
           if idx_selecionado < len(st.session_state.reconhecimento):
             res_val, com_val, tb_val, out_val = 0, 0, 0, 0
             if "Residência" in novo_tipo_imovel:
@@ -481,7 +479,13 @@ with aba_fechadas:
     st.markdown("---")
 
     if not df_fechados.empty:
-      c_filtro1, c_filtro2 = st.columns(2)
+      # ADICIONADO: Filtro por Data e Demais Filtros
+      c_filtro0, c_filtro1, c_filtro2 = st.columns(3)
+      with c_filtro0:
+        datas_f = ["Todas as Datas"] + sorted(list(df_fechados["Data"].unique()))
+        data_filtro = st.selectbox(
+            "Filtrar por Data da Visita", datas_f, key="filtro_data_fechados"
+        )
       with c_filtro1:
         quarteiroes_f = ["Todos"] + list(df_fechados["Quarteirao"].unique())
         quart_filtro = st.selectbox(
@@ -494,6 +498,10 @@ with aba_fechadas:
         )
 
       df_filtrado_fechados = df_fechados.copy()
+      if data_filtro != "Todas as Datas":
+        df_filtrado_fechados = df_filtrado_fechados[
+            df_filtrado_fechados["Data"] == data_filtro
+        ]
       if quart_filtro != "Todos":
         df_filtrado_fechados = df_filtrado_fechados[
             df_filtrado_fechados["Quarteirao"] == quart_filtro

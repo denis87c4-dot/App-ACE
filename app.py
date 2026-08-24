@@ -19,7 +19,7 @@ if "vistorias" not in st.session_state:
 if "reconhecimento" not in st.session_state:
     st.session_state.reconhecimento = []
 
-# ==================== ABAS PRINCIPAIS (TODAS INCLUÍDAS) ====================
+# ==================== ABAS PRINCIPAIS ====================
 (
     aba_cadastro,
     aba_busca,
@@ -38,13 +38,49 @@ if "reconhecimento" not in st.session_state:
 
 # ==================== ABA 1: RELATÓRIO DIÁRIO ====================
 with aba_cadastro:
-  st.subheader("📋 Relatório Diário de Campo")
+  st.subheader("📋 Relatório Diário de Campo (Modo Rápido)")
   st.markdown(
-      "Preencha os dados da visita domiciliar ou comercial realizada no"
-      " quarteirão."
+      "⚡ **Modo de Campo Agilizado:** O sistema memoriza seus últimos dados"
+      " preenchidos (data, semana, quarteirão, rua e agente). Ao salvar, apenas"
+      " o número da casa é limpo para a próxima vistoria!"
   )
 
-  with st.form("form_relatorio_diario", clear_on_submit=True):
+  # Extração de listas históricas para os dropdowns inteligentes
+  historico_quart = (
+      list(
+          set(
+              [
+                  str(v["Quarteirao"])
+                  for v in st.session_state.vistorias
+                  if "Quarteirao" in v
+              ]
+          )
+      )
+      if st.session_state.vistorias
+      else []
+  )
+  historico_ruas = (
+      list(
+          set([v["Rua"] for v in st.session_state.vistorias if "Rua" in v])
+      )
+      if st.session_state.vistorias
+      else []
+  )
+  historico_agentes = (
+      list(
+          set(
+              [
+                  v["Agente"]
+                  for v in st.session_state.vistorias
+                  if "Agente" in v and v["Agente"]
+              ]
+          )
+      )
+      if st.session_state.vistorias
+      else []
+  )
+
+  with st.form("form_relatorio_diario", clear_on_submit=False):
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -56,21 +92,39 @@ with aba_cadastro:
           max_value=53,
           value=semana_padrao,
           step=1,
-          help="Calculado automaticamente pela data, mas pode ser ajustado.",
       )
-      num_quarteirao = st.text_input("Nº do Quarteirão", placeholder="Ex: 142B")
+
+      # Dropdown inteligente para Quarteirão (permite selecionar ou digitar novo)
+      q_options = [""] + sorted(historico_quart)
+      num_quarteirao = st.selectbox(
+          "Nº do Quarteirão",
+          options=q_options,
+          help="Selecione um quarteirão anterior ou digite direto no campo se preferir",
+      )
+      # Fallback criativo: se quiser digitar livremente caso não esteja na lista
+      if not num_quarteirao:
+        num_quarteirao = st.text_input(
+            "Ou digite o Quarteirão novo", placeholder="Ex: 142B"
+        )
 
     with col2:
       lado = st.number_input(
-          "Lado do Quarteirão",
-          min_value=1,
-          value=1,
-          step=1,
-          help="Digite apenas o número do lado (Ex: 1, 2, 3...)",
+          "Lado do Quarteirão", min_value=1, value=1, step=1
       )
-      nome_rua = st.text_input("Nome da Rua / Logradouro")
+
+      # Dropdown inteligente para Rua
+      r_options = [""] + sorted(historico_ruas)
+      nome_rua = st.selectbox(
+          "Nome da Rua / Logradouro",
+          options=r_options,
+          help="Selecione uma rua recente ou digite",
+      )
+      if not nome_rua:
+        nome_rua = st.text_input("Ou digite a Rua nova", placeholder="Ex: Rua das Flores")
+
       num_casa = st.text_input(
-          "Nº / Identificação do Imóvel", placeholder="Ex: 3A/5, 2/1"
+          "Nº / Identificação do Imóvel",
+          placeholder="Ex: 3A/5, 2/1 (Este limpa a cada salvamento)",
       )
 
     with col3:
@@ -90,9 +144,12 @@ with aba_cadastro:
       vistoria = st.selectbox(
           "Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"]
       )
-      agente_resp = st.text_input(
-          "Agente Responsável", placeholder="Ex: Denison"
-      )
+
+      # Dropdown inteligente para Agente
+      a_options = [""] + sorted(historico_agentes)
+      agente_resp = st.selectbox("Agente Responsável", options=a_options)
+      if not agente_resp:
+        agente_resp = st.text_input("Ou digite o Agente novo", placeholder="Ex: Denison")
 
     st.markdown("---")
     st.subheader("🔬 Dados Entomológicos e Tratamento")
@@ -100,29 +157,17 @@ with aba_cadastro:
     c1, c2, c3, c4, c5, c6 = st.columns(6)
 
     with c1:
-      eliminados = st.number_input(
-          "Eliminados", min_value=0, value=0, help="Depósitos eliminados"
-      )
+      eliminados = st.number_input("Eliminados", min_value=0, value=0)
     with c2:
-      tubitos = st.number_input(
-          "Tubitos", min_value=0, value=0, help="Amostras de larvas"
-      )
+      tubitos = st.number_input("Tubitos", min_value=0, value=0)
     with c3:
-      imoveis_tratados = st.number_input(
-          "Tratados", min_value=0, value=0, help="Imóveis tratados"
-      )
+      imoveis_tratados = st.number_input("Tratados", min_value=0, value=0)
     with c4:
-      gramas = st.number_input(
-          "Gramas (g)", min_value=0.0, format="%.1f", value=0.0
-      )
+      gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=0.0)
     with c5:
-      depositos = st.number_input(
-          "Depósitos", min_value=0, value=0, help="Qtd de depósitos"
-      )
+      depositos = st.number_input("Depósitos", min_value=0, value=0)
     with c6:
-      litros = st.number_input(
-          "Litros (L)", min_value=0.0, format="%.1f", value=0.0
-      )
+      litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=0.0)
 
     submitted = st.form_submit_button(
         "💾 Salvar Registro Diário", use_container_width=True
@@ -180,9 +225,11 @@ with aba_cadastro:
         st.session_state.reconhecimento.append(registro_rec)
 
         st.success(
-            f"✅ Imóvel **{num_casa}** (Semana {num_semana}, Lado {lado})"
-            " registrado e integrado com sucesso!"
+            f"✅ Imóvel **{num_casa}** (Semana {num_semana}, Rua {nome_rua})"
+            " salvo com sucesso! Os campos principais foram mantidos para o"
+            " próximo."
         )
+        st.rerun()
 
   if st.session_state.vistorias:
     st.markdown("---")
@@ -403,7 +450,7 @@ with aba_semanal:
         " dados consolidados aqui."
     )
 
-# ==================== ABA 5: RECONHECIMENTO & AUDITORIA ====================
+# ==================== ABA 5: RECONHECIMIENTO & AUDITORIA ====================
 with aba_reconhecimento:
   st.subheader("📊 Painel de Reconhecimento Geográfico & Auditoria")
   st.markdown(

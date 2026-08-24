@@ -107,9 +107,6 @@ with aba_cadastro:
           value=semana_padrao,
           step=1,
       )
-      
-      # Novo campo Ciclo
-      ciclo_atual = st.text_input("🔄 Ciclo", placeholder="Ex: 1º Ciclo", value="1º Ciclo")
 
       opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
       sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
@@ -205,7 +202,6 @@ with aba_cadastro:
         novo_registro = {
             "Data": data_visita.strftime("%d/%m/%Y"),
             "Semana": int(num_semana),
-            "Ciclo": str(ciclo_atual).strip(),
             "Quarteirao": str(num_quarteirao).strip(),
             "Lado": int(lado),
             "Rua": str(nome_rua).strip(),
@@ -274,8 +270,8 @@ with aba_cadastro:
     opcoes_registros = {}
     for idx, reg in enumerate(st.session_state.vistorias):
       label = (
-          f"#{idx+1} | Data: {reg['Data']} | Quarteirão: {reg['Quarteirao']} | "
-          f"Rua: {reg['Rua']} | Casa: {reg['Casa']}"
+          f"#{idx+1} | Quarteirão: {reg['Quarteirao']} | Rua: {reg['Rua']} |"
+          f" Casa: {reg['Casa']} | Data: {reg['Data']}"
       )
       opcoes_registros[label] = idx
 
@@ -307,6 +303,7 @@ with aba_cadastro:
         e_col1, e_col2, e_col3 = st.columns(3)
 
         with e_col1:
+          # Tentar converter a data salva ou usar o dia de hoje caso haja erro
           try:
             dt_parse = datetime.strptime(reg_atual["Data"], "%d/%m/%Y").date()
           except:
@@ -314,16 +311,14 @@ with aba_cadastro:
             
           novo_data_visita = st.date_input("Data da Visita", value=dt_parse)
           novo_num_semana = st.number_input("Semana Epidemiológica", min_value=1, max_value=53, value=int(reg_atual.get("Semana", 1)))
-          novo_ciclo = st.text_input("🔄 Ciclo", value=str(reg_atual.get("Ciclo", "1º Ciclo")))
+          novo_quarteirao = st.text_input("Nº do Quarteirão", value=str(reg_atual["Quarteirao"]))
 
         with e_col2:
-          novo_quarteirao = st.text_input("Nº do Quarteirão", value=str(reg_atual["Quarteirao"]))
           novo_lado = st.number_input("Lado", min_value=1, value=int(reg_atual.get("Lado", 1)))
           novo_nome_rua = st.text_input("Nome da Rua", value=str(reg_atual["Rua"]))
+          novo_num_casa = st.text_input("Nº / Identificação do Imóvel", value=str(reg_atual["Casa"]))
 
         with e_col3:
-          novo_num_casa = st.text_input("Nº / Identificação do Imóvel", value=str(reg_atual["Casa"]))
-          
           tipos_possiveis = [
               "Residência (RES)",
               "Comércio (COM)",
@@ -365,10 +360,10 @@ with aba_cadastro:
         salvar_edicao = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
 
         if salvar_edicao:
+          # Atualiza os dados na sessão
           st.session_state.vistorias[idx_selecionado] = {
               "Data": novo_data_visita.strftime("%d/%m/%Y"),
               "Semana": int(novo_num_semana),
-              "Ciclo": str(novo_ciclo).strip(),
               "Quarteirao": str(novo_quarteirao).strip(),
               "Lado": int(novo_lado),
               "Rua": str(novo_nome_rua).strip(),
@@ -385,6 +380,7 @@ with aba_cadastro:
               "Litros": float(novo_litros),
           }
 
+          # Atualiza também no reconhecimento se existir correspondência
           if idx_selecionado < len(st.session_state.reconhecimento):
             res_val, com_val, tb_val, out_val = 0, 0, 0, 0
             if "Residência" in novo_tipo_imovel:
@@ -485,29 +481,19 @@ with aba_fechadas:
     st.markdown("---")
 
     if not df_fechados.empty:
-      # Adicionada opção de filtro por data
-      c_filtro1, c_filtro2, c_filtro3 = st.columns(3)
+      c_filtro1, c_filtro2 = st.columns(2)
       with c_filtro1:
-        datas_f = ["Todas"] + sorted(list(df_fechados["Data"].unique()))
-        data_filtro = st.selectbox(
-            "📅 Filtrar por Data da Visita", datas_f, key="filtro_data_fechados"
-        )
-      with c_filtro2:
-        quarteiroes_f = ["Todos"] + sorted(list(df_fechados["Quarteirao"].unique()))
+        quarteiroes_f = ["Todos"] + list(df_fechados["Quarteirao"].unique())
         quart_filtro = st.selectbox(
             "Filtrar por Quarteirão", quarteiroes_f, key="filtro_quart_fechados"
         )
-      with c_filtro3:
-        agentes_f = ["Todos"] + sorted(list(df_fechados["Agente"].unique()))
+      with c_filtro2:
+        agentes_f = ["Todos"] + list(df_fechados["Agente"].unique())
         agente_filtro = st.selectbox(
             "Filtrar por Agente", agentes_f, key="filtro_agente_fechados"
         )
 
       df_filtrado_fechados = df_fechados.copy()
-      if data_filtro != "Todas":
-        df_filtrado_fechados = df_filtrado_fechados[
-            df_filtrado_fechados["Data"] == data_filtro
-        ]
       if quart_filtro != "Todos":
         df_filtrado_fechados = df_filtrado_fechados[
             df_filtrado_fechados["Quarteirao"] == quart_filtro
@@ -517,7 +503,7 @@ with aba_fechadas:
             df_filtrado_fechados["Agente"] == agente_filtro
         ]
 
-      st.markdown(f"### 📋 Tabela Detalhada (Roteiro de Retorno) — Exibindo {len(df_filtrado_fechados)} imóveis")
+      st.markdown("### 📋 Tabela Detalhada (Roteiro de Retorno)")
       st.dataframe(df_filtrado_fechados, use_container_width=True)
 
       st.markdown("### 📊 Incidência por Quarteirão")

@@ -465,21 +465,9 @@ with aba_fechadas:
         df_vistorias["Vistoria"].str.contains("Fechada", case=False, na=False)
     ]
 
-    f1, f2, f3 = st.columns(3)
-    f1.metric("🚪 Total Fechadas / Recusas", len(df_fechados))
-    f2.metric(
-        "🏘️ Quarteirões Afetados",
-        df_fechados["Quarteirao"].nunique() if not df_fechados.empty else 0,
-    )
-    f3.metric(
-        "👤 Agentes Envolvidos",
-        df_fechados["Agente"].nunique() if not df_fechados.empty else 0,
-    )
-
-    st.markdown("---")
-
     if not df_fechados.empty:
-      # ADICIONADO: Filtro por Data e Demais Filtros
+      st.markdown("---")
+      # Filtros localizados ANTES das métricas para permitir a interatividade dinâmica
       c_filtro0, c_filtro1, c_filtro2 = st.columns(3)
       with c_filtro0:
         datas_f = ["Todas as Datas"] + sorted(list(df_fechados["Data"].unique()))
@@ -497,6 +485,7 @@ with aba_fechadas:
             "Filtrar por Agente", agentes_f, key="filtro_agente_fechados"
         )
 
+      # Aplicação dos filtros no DataFrame de fechados
       df_filtrado_fechados = df_fechados.copy()
       if data_filtro != "Todas as Datas":
         df_filtrado_fechados = df_filtrado_fechados[
@@ -511,10 +500,24 @@ with aba_fechadas:
             df_filtrado_fechados["Agente"] == agente_filtro
         ]
 
+      st.markdown("---")
+      # Métricas dinâmicas recalculadas com base nos filtros aplicados
+      f1, f2, f3 = st.columns(3)
+      f1.metric("🚪 Total Fechadas / Recusas (Filtrado)", len(df_filtrado_fechados))
+      f2.metric(
+          "🏘️ Quarteirões Afetados",
+          df_filtrado_fechados["Quarteirao"].nunique() if not df_filtrado_fechados.empty else 0,
+      )
+      f3.metric(
+          "👤 Agentes Envolvidos",
+          df_filtrado_fechados["Agente"].nunique() if not df_filtrado_fechados.empty else 0,
+      )
+
+      st.markdown("---")
       st.markdown("### 📋 Tabela Detalhada (Roteiro de Retorno)")
       st.dataframe(df_filtrado_fechados, use_container_width=True)
 
-      st.markdown("### 📊 Incidência por Quarteirão")
+      st.markdown("### 📊 Incidência por Quarteirão (Base Geral)")
       chart_fechados = (
           alt.Chart(df_fechados)
           .mark_bar(color="#e74c3c")
@@ -814,7 +817,7 @@ with aba_backup:
           dados_carregados = False
 
           if os.path.exists(ARQUIVO_VISTORIAS):
-            df_v = pd.read_csv(ARQUIVO_VISTORIAS)
+            df_v = pd.read_csv(ARQUIVO_Vistorias) if 'ARQUIVO_Vistorias' in locals() else pd.read_csv(ARQUIVO_VISTORIAS)
             st.session_state.vistorias = df_v.to_dict("records")
             dados_carregados = True
 

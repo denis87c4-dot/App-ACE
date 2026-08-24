@@ -108,40 +108,30 @@ with aba_cadastro:
           step=1,
       )
 
-      # Quarteirão: Seleção inteligente com suporte a novo valor
-      if historico_quart:
-        opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
-        sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q)
-        if sel_q == "➕ Digitar novo quarteirão...":
-          num_quarteirao = st.text_input(
-              "Digite o Novo Quarteirão", placeholder="Ex: 142B"
-          )
-        else:
-          num_quarteirao = sel_q
-      else:
+      # Quarteirão: Sempre com suporte a inclusão garantida
+      opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
+      sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q)
+      if sel_q == "➕ Digitar novo quarteirão..." or not historico_quart:
         num_quarteirao = st.text_input(
-            "Nº do Quarteirão", placeholder="Ex: 142B"
+            "Digite o Novo Quarteirão", placeholder="Ex: 142B"
         )
+      else:
+        num_quarteirao = sel_q
 
     with col2:
       lado = st.number_input(
           "Lado do Quarteirão", min_value=1, value=1, step=1
       )
 
-      # Rua: Seleção inteligente com suporte a nova rua garantido
-      if historico_ruas:
-        opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
-        sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r)
-        if sel_r == "➕ Digitar nova rua...":
-          nome_rua = st.text_input(
-              "Digite a Nova Rua", placeholder="Ex: Rua das Flores"
-          )
-        else:
-          nome_rua = sel_r
-      else:
+      # Rua: Sempre com suporte a inclusão garantida
+      opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
+      sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r)
+      if sel_r == "➕ Digitar nova rua..." or not historico_ruas:
         nome_rua = st.text_input(
-            "Nome da Rua / Logradouro", placeholder="Ex: Rua das Flores"
+            "Digite a Nova Rua", placeholder="Ex: Rua das Flores"
         )
+      else:
+        nome_rua = sel_r
 
       num_casa = st.text_input(
           "Nº / Identificação do Imóvel",
@@ -166,20 +156,15 @@ with aba_cadastro:
           "Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"]
       )
 
-      # Agente: Seleção inteligente com suporte a novo valor
-      if historico_agentes:
-        opcoes_a = historico_agentes + ["➕ Digitar novo agente..."]
-        sel_a = st.selectbox("Agente Responsável", options=opcoes_a)
-        if sel_a == "➕ Digitar novo agente...":
-          agente_resp = st.text_input(
-              "Digite o Nome do Agente", placeholder="Ex: Denison"
-          )
-        else:
-          agente_resp = sel_a
-      else:
+      # Agente: Sempre com suporte a inclusão garantida
+      opcoes_a = historico_agentes + ["➕ Digitar novo agente..."]
+      sel_a = st.selectbox("Agente Responsável", options=opcoes_a)
+      if sel_a == "➕ Digitar novo agente..." or not historico_agentes:
         agente_resp = st.text_input(
-            "Agente Responsável", placeholder="Ex: Denison"
+            "Digite o Nome do Agente", placeholder="Ex: Denison"
         )
+      else:
+        agente_resp = sel_a
 
     st.markdown("---")
     st.subheader("🔬 Dados Entomológicos e Tratamento")
@@ -646,7 +631,6 @@ with aba_backup:
         " seus cadastros atuais."
     )
 
-    # Prepara arquivos temporários atuais para download se houver dados na sessão
     if st.session_state.vistorias:
       pd.DataFrame(st.session_state.vistorias).to_csv(
           ARQUIVO_VISTORIAS, index=False

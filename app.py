@@ -415,41 +415,130 @@ with aba_cadastro:
 
 # ==================== ABA 2: BUSCA AVANÇADA ====================
 with aba_busca:
-  st.subheader("🔍 Busca Avançada e Filtros Globais")
-
-  if st.session_state.reconhecimento or st.session_state.vistorias:
-    base_escolhida = st.selectbox(
-        "Escolha a base para buscar",
-        ["Relatório Diário (Vistorias)", "Reconhecimento Integrado"],
+    st.subheader("🔍 Busca Avançada e Filtros Globais")
+    st.markdown(
+        "Filtre os dados cruzando múltiplos critérios (condição da vistoria, tipo de imóvel, "
+        "semana epidemiológica, agente, quarteirão, rua) ou faça uma busca textual livre."
     )
 
-    df_base = (
-        pd.DataFrame(st.session_state.vistorias)
-        if "Diário" in base_escolhida
-        else pd.DataFrame(st.session_state.reconhecimento)
-    )
-
-    if not df_base.empty:
-      termo = st.text_input(
-          "🔍 Digite qualquer termo para buscar na base escolhida:",
-          placeholder="Ex: Rua das Flores, 142, Normal...",
-      )
-      if termo:
-        mask = (
-            df_base.astype(str)
-            .apply(lambda x: x.str.contains(termo, case=False, na=False))
-            .any(axis=1)
+    if st.session_state.vistorias or st.session_state.reconhecimento:
+        base_escolhida = st.selectbox(
+            "Escolha a base para filtrar",
+            ["Relatório Diário (Vistorias)", "Reconhecimento Integrado"],
+            key="select_base_busca"
         )
-        df_resultado = df_base[mask]
-      else:
-        df_resultado = df_base
 
-      st.info(f"Mostrando {len(df_resultado)} registros encontrados.")
-      st.dataframe(df_resultado, use_container_width=True)
+        df_base = (
+            pd.DataFrame(st.session_state.vistorias)
+            if "Diário" in base_escolhida
+            else pd.DataFrame(st.session_state.reconhecimento)
+        )
+
+        if not df_base.empty:
+            st.markdown("---")
+            st.markdown("### 🎛️ Painel de Filtros Avançados")
+
+            if "Diário" in base_escolhida:
+                df_filtrado = df_base.copy()
+
+                if "Semana" in df_filtrado.columns:
+                    df_filtrado["Semana"] = pd.to_numeric(df_filtrado["Semana"], errors="coerce").fillna(1).astype(int)
+
+                c_f1, c_f2, c_f3 = st.columns(3)
+
+                with c_f1:
+                    if "Vistoria" in df_filtrado.columns:
+                        condicoes_disponiveis = ["Todas"] + sorted(list(df_filtrado["Vistoria"].dropna().unique()))
+                        filtro_vistoria = st.selectbox("Condição da Vistoria", condicoes_disponiveis, key="filtro_avancado_vistoria")
+                        if filtro_vistoria != "Todas":
+                            df_filtrado = df_filtrado[df_filtrado["Vistoria"] == filtro_vistoria]
+
+                    if "Tipo Imovel" in df_filtrado.columns:
+                        tipos_disponiveis = ["Todos"] + sorted(list(df_filtrado["Tipo Imovel"].dropna().unique()))
+                        filtro_tipo = st.selectbox("Tipo de Imóvel", tipos_disponiveis, key="filtro_avancado_tipo")
+                        if filtro_tipo != "Todos":
+                            df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"] == filtro_tipo]
+
+                with c_f2:
+                    if "Semana" in df_filtrado.columns:
+                        semanas_disponiveis = ["Todas"] + sorted(list(df_filtrado["Semana"].unique()))
+                        filtro_semana = st.selectbox("Semana Epidemiológica", semanas_disponiveis, key="filtro_avancado_semana")
+                        if filtro_semana != "Todas":
+                            df_filtrado = df_filtrado[df_filtrado["Semana"] == int(filtro_semana)]
+
+                    if "Agente" in df_filtrado.columns:
+                        agentes_disponiveis = ["Todos"] + sorted(list(df_filtrado["Agente"].dropna().unique()))
+                        filtro_agente = st.selectbox("Agente Responsável", agentes_disponiveis, key="filtro_avancado_agente")
+                        if filtro_agente != "Todas":
+                            df_filtrado = df_filtrado[df_filtrado["Agente"] == filtro_agente]
+
+                with c_f3:
+                    if "Quarteirao" in df_filtrado.columns:
+                        quarts_disponiveis = ["Todos"] + sorted(list(df_filtrado["Quarteirao"].dropna().astype(str).unique()))
+                        filtro_quart = st.selectbox("Quarteirão", quarts_disponiveis, key="filtro_avancado_quart")
+                        if filtro_quart != "Todos":
+                            df_filtrado = df_filtrado[df_filtrado["Quarteirao"].astype(str) == filtro_quart]
+
+                    if "Rua" in df_filtrado.columns:
+                        ruas_disponiveis = ["Todas"] + sorted(list(df_filtrado["Rua"].dropna().astype(str).unique()))
+                        filtro_rua = st.selectbox("Rua / Logradouro", ruas_disponiveis, key="filtro_avancado_rua")
+                        if filtro_rua != "Todas":
+                            df_filtrado = df_filtrado[df_filtrado["Rua"].astype(str) == filtro_rua]
+
+                st.markdown("---")
+                termo_livre = st.text_input(
+                    "🔎 Busca Textual Complementar (Opcional):",
+                    placeholder="Digite para refinar ainda mais (ex: número da casa, observação, etc.)",
+                    key="filtro_avancado_termo"
+                )
+                if termo_livre:
+                    mask = (
+                        df_filtrado.astype(str)
+                        .apply(lambda x: x.str.contains(termo_livre, case=False, na=False))
+                        .any(axis=1)
+                    )
+                    df_filtrado = df_filtrado[mask]
+
+            else:
+                termo_livre = st.text_input(
+                    "🔍 Digite qualquer termo para buscar na base de Reconhecimento:",
+                    placeholder="Ex: Quarteirão, Auditor...",
+                    key="filtro_avancado_recon"
+                )
+                if termo_livre:
+                    mask = (
+                        df_base.astype(str)
+                        .apply(lambda x: x.str.contains(termo_livre, case=False, na=False))
+                        .any(axis=1)
+                    )
+                    df_filtrado = df_base[mask]
+                else:
+                    df_filtrado = df_base.copy()
+
+            st.markdown("---")
+            col_m1, col_m2, col_m3 = st.columns(3)
+            col_m1.metric("📊 Total de Registros Filtrados", len(df_filtrado))
+            if "Eliminados" in df_filtrado.columns:
+                col_m2.metric("🗑️ Dep. Eliminados (Filtro)", int(df_filtrado["Eliminados"].sum()))
+            if "Tratados" in df_filtrado.columns:
+                col_m3.metric("🛠️ Imóveis Tratados (Filtro)", int(df_filtrado["Tratados"].sum()))
+
+            st.markdown("### 📋 Resultados da Busca e Filtros")
+            st.dataframe(df_filtrado, use_container_width=True)
+
+            if not df_filtrado.empty:
+                csv_export = df_filtrado.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Baixar Dados Filtrados (CSV)",
+                    data=csv_export,
+                    file_name=f"busca_filtrada_ace_{datetime.today().strftime('%Y-%m-%d')}.csv",
+                    mime="text/csv",
+                    key="btn_download_busca_filtrada"
+                )
+        else:
+            st.info("Nenhum dado disponível nesta base.")
     else:
-      st.info("Nenhum dado disponível nesta base.")
-  else:
-    st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
+        st.info("⚠️ Nenhum dado cadastrado no sistema ainda.")
 
 # ==================== ABA 3: IMÓVEIS FECHADOS & RECUSAS ====================
 with aba_fechadas:
@@ -467,7 +556,6 @@ with aba_fechadas:
 
     if not df_fechados.empty:
       st.markdown("---")
-      # Filtros localizados ANTES das métricas para permitir a interatividade dinâmica
       c_filtro0, c_filtro1, c_filtro2 = st.columns(3)
       with c_filtro0:
         datas_f = ["Todas as Datas"] + sorted(list(df_fechados["Data"].unique()))
@@ -485,7 +573,6 @@ with aba_fechadas:
             "Filtrar por Agente", agentes_f, key="filtro_agente_fechados"
         )
 
-      # Aplicação dos filtros no DataFrame de fechados
       df_filtrado_fechados = df_fechados.copy()
       if data_filtro != "Todas as Datas":
         df_filtrado_fechados = df_filtrado_fechados[
@@ -501,7 +588,6 @@ with aba_fechadas:
         ]
 
       st.markdown("---")
-      # Métricas dinâmicas recalculadas com base nos filtros aplicados
       f1, f2, f3 = st.columns(3)
       f1.metric("🚪 Total Fechadas / Recusas (Filtrado)", len(df_filtrado_fechados))
       f2.metric(
@@ -817,7 +903,7 @@ with aba_backup:
           dados_carregados = False
 
           if os.path.exists(ARQUIVO_VISTORIAS):
-            df_v = pd.read_csv(ARQUIVO_Vistorias) if 'ARQUIVO_Vistorias' in locals() else pd.read_csv(ARQUIVO_VISTORIAS)
+            df_v = pd.read_csv(ARQUIVO_VISTORIAS)
             st.session_state.vistorias = df_v.to_dict("records")
             dados_carregados = True
 

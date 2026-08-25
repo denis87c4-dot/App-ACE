@@ -599,6 +599,24 @@ with aba_busca:
                     )
                     df_filtrado = df_filtrado[mask]
 
+                st.markdown("---")
+                
+                # --- MÉTRICAS DESTACADAS NA FRENTE ---
+                if "Vistoria" in df_filtrado.columns:
+                    total_normais = len(df_filtrado[df_filtrado["Vistoria"].str.contains("Normal", case=False, na=False)])
+                    total_fechadas = len(df_filtrado[df_filtrado["Vistoria"].str.contains("Fechada", case=False, na=False)])
+                else:
+                    total_normais, total_fechadas = 0, 0
+
+                col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+                col_m1.metric("📊 Total Filtrado", len(df_filtrado))
+                col_m2.metric("🏡 Imóveis Normais", total_normais)
+                col_m3.metric("🚪 Fechadas / Recusas", total_fechadas)
+                if "Eliminados" in df_filtrado.columns:
+                    col_m4.metric("🗑️ Dep. Eliminados", int(df_filtrado["Eliminados"].sum()))
+                if "Tratados" in df_filtrado.columns:
+                    col_m5.metric("🛠️ Imóveis Tratados", int(df_filtrado["Tratados"].sum()))
+
             else:
                 termo_livre = st.text_input(
                     "🔍 Digite qualquer termo para buscar na base de Reconhecimento:",
@@ -615,13 +633,9 @@ with aba_busca:
                 else:
                     df_filtrado = df_base.copy()
 
-            st.markdown("---")
-            col_m1, col_m2, col_m3 = st.columns(3)
-            col_m1.metric("📊 Total de Registros Filtrados", len(df_filtrado))
-            if "Eliminados" in df_filtrado.columns:
-                col_m2.metric("🗑️ Dep. Eliminados (Filtro)", int(df_filtrado["Eliminados"].sum()))
-            if "Tratados" in df_filtrado.columns:
-                col_m3.metric("🛠️ Imóveis Tratados (Filtro)", int(df_filtrado["Tratados"].sum()))
+                st.markdown("---")
+                col_m1, col_m2 = st.columns(2)
+                col_m1.metric("📊 Total de Registros Filtrados", len(df_filtrado))
 
             st.markdown("### 📋 Resultados da Busca e Filtros")
             st.dataframe(df_filtrado, use_container_width=True)

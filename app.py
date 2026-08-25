@@ -13,11 +13,44 @@ st.set_page_config(
 
 st.title("🛡️ Sistema de Controle de Endemias (ACE - Painel Integrado)")
 
-# Inicialização de estados globais unificados
+# ==================== PERSISTÊNCIA AUTOMÁTICA EM DISCO ====================
+ARQUIVO_VISTORIAS = "vistorias_diarias.csv"
+ARQUIVO_RECONHECIMENTO = "reconhecimento.csv"
+
+# Inicialização de estados globais unificados com recuperação automática do disco
 if "vistorias" not in st.session_state:
-    st.session_state.vistorias = []
+    if os.path.exists(ARQUIVO_VISTORIAS):
+        try:
+            df_v_init = pd.read_csv(ARQUIVO_VISTORIAS)
+            if "Ciclo" not in df_v_init.columns:
+                df_v_init["Ciclo"] = "Ciclo 1"
+            st.session_state.vistorias = df_v_init.to_dict("records")
+        except:
+            st.session_state.vistorias = []
+    else:
+        st.session_state.vistorias = []
+
 if "reconhecimento" not in st.session_state:
-    st.session_state.reconhecimento = []
+    if os.path.exists(ARQUIVO_RECONHECIMENTO):
+        try:
+            df_r_init = pd.read_csv(ARQUIVO_RECONHECIMENTO)
+            st.session_state.reconhecimento = df_r_init.to_dict("records")
+        except:
+            st.session_state.reconhecimento = []
+    else:
+        st.session_state.reconhecimento = []
+
+def salvar_estado_local():
+    """Função auxiliar para salvar os dados instantaneamente no disco local"""
+    if st.session_state.vistorias:
+        pd.DataFrame(st.session_state.vistorias).to_csv(ARQUIVO_VISTORIAS, index=False)
+    elif os.path.exists(ARQUIVO_VISTORIAS):
+        os.remove(ARQUIVO_VISTORIAS)
+        
+    if st.session_state.reconhecimento:
+        pd.DataFrame(st.session_state.reconhecimento).to_csv(ARQUIVO_RECONHECIMENTO, index=False)
+    elif os.path.exists(ARQUIVO_RECONHECIMENTO):
+        os.remove(ARQUIVO_RECONHECIMENTO)
 
 # ==================== ABAS PRINCIPAIS ====================
 (
@@ -108,7 +141,6 @@ with aba_cadastro:
           step=1,
       )
 
-      # 🔄 NOVO: Campo de Ciclo (1 a 6)
       ciclo_selecionado = st.selectbox(
           "🔄 Ciclo Epidemiológico",
           ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"],
@@ -208,7 +240,7 @@ with aba_cadastro:
         novo_registro = {
             "Data": data_visita.strftime("%d/%m/%Y"),
             "Semana": int(num_semana),
-            "Ciclo": ciclo_selecionado,  # <--- Salvando o ciclo
+            "Ciclo": ciclo_selecionado,
             "Quarteirao": str(num_quarteirao).strip(),
             "Lado": int(lado),
             "Rua": str(nome_rua).strip(),
@@ -249,6 +281,9 @@ with aba_cadastro:
             "Auditor": agente_resp if agente_resp else "Geral",
         }
         st.session_state.reconhecimento.append(registro_rec)
+
+        # 💾 SALVA AUTOMATICAMENTE NO DISCO
+        salvar_estado_local()
 
         st.success(
             f"✅ Imóvel **{num_casa}** na rua **{nome_rua}** salvo com"
@@ -300,6 +335,10 @@ with aba_cadastro:
             st.session_state.reconhecimento
         ):
           st.session_state.reconhecimento.pop(idx_selecionado)
+        
+        # 💾 SALVA AUTOMATICAMENTE NO DISCO
+        salvar_estado_local()
+
         st.success("✅ Registro excluído com sucesso!")
         st.rerun()
 
@@ -417,6 +456,9 @@ with aba_cadastro:
                 "Auditor": novo_agente_resp if novo_agente_resp else "Geral",
             }
 
+          # 💾 SALVA AUTOMATICAMENTE NO DISCO
+          salvar_estado_local()
+
           st.success("✅ Registro atualizado com sucesso!")
           st.rerun()
 
@@ -426,6 +468,7 @@ with aba_cadastro:
       if st.button("🗑️ Limpar Todos os Registros Diários"):
         st.session_state.vistorias = []
         st.session_state.reconhecimento = []
+        salvar_estado_local()
         st.rerun()
 
 # ==================== ABA 2: BUSCA AVANÇADA ====================
@@ -456,18 +499,15 @@ with aba_busca:
             if "Diário" in base_escolhida:
                 df_filtrado = df_base.copy()
 
-                # Garantir que a coluna 'Ciclo' exista mesmo em backups antigos
                 if "Ciclo" not in df_filtrado.columns:
                     df_filtrado["Ciclo"] = "Ciclo 1"
 
-                # Converter coluna de Data para o formato datetime do Pandas para permitir filtros por período
                 if "Data" in df_filtrado.columns:
                     df_filtrado["Data_dt"] = pd.to_datetime(df_filtrado["Data"], format="%d/%m/%Y", errors="coerce")
 
                 if "Semana" in df_filtrado.columns:
                     df_filtrado["Semana"] = pd.to_numeric(df_filtrado["Semana"], errors="coerce").fillna(1).astype(int)
 
-                # Seção de Filtro por Data (Opção de Data Única ou Período)
                 if "Data_dt" in df_filtrado.columns and not df_filtrado["Data_dt"].isna().all():
                     st.markdown("📅 **Filtro por Período / Data da Visita**")
                     tipo_filtro_data = st.radio(
@@ -533,7 +573,7 @@ with aba_busca:
                     if "Agente" in df_filtrado.columns:
                         agentes_disponiveis = ["Todos"] + sorted(list(df_filtrado["Agente"].dropna().unique()))
                         filtro_agente = st.selectbox("Agente Responsável", agentes_disponiveis, key="filtro_avancado_agente")
-                        if filtro_agente != "Todas":
+                        if filtro_agente != "Todos":
                             df_filtrado = df_filtrado[df_filtrado["Agente"] == filtro_agente]
 
                     if "Quarteirao" in df_filtrado.columns:
@@ -542,14 +582,13 @@ with aba_busca:
                         if filtro_quart != "Todos":
                             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].astype(str) == filtro_quart]
 
-                # Remover coluna auxiliar de data para exibição limpa da tabela
                 if "Data_dt" in df_filtrado.columns:
                     df_filtrado = df_filtrado.drop(columns=["Data_dt"])
 
                 st.markdown("---")
                 termo_livre = st.text_input(
                     "🔎 Busca Textual Complementar (Opcional):",
-                    placeholder="Digite para refinar ainda mais (ex: número da casa, observação, etc.)",
+                    placeholder="Digite para refinar ainda mais...",
                     key="filtro_avancado_termo"
                 )
                 if termo_livre:
@@ -884,14 +923,10 @@ with aba_reconhecimento:
 with aba_backup:
   st.subheader("🔐 Central de Segurança e Recuperação de Dados (.zip)")
   st.markdown(
-      "Se você perdeu os dados por reiniciar o sistema ou limpar a memória,"
-      " basta carregar o arquivo **ZIP** de backup que você guardou consigo."
-      " Garantimos que seus dados voltarão instantaneamente para todas as"
-      " abas."
+      "O sistema agora salva seus dados **automaticamente no disco local** toda vez que você altera algo. "
+      "Mesmo que você fique em background ou feche a aba, seus dados estarão seguros. "
+      "Ainda assim, você pode baixar um pacote `.zip` de segurança quando desejar."
   )
-
-  ARQUIVO_VISTORIAS = "vistorias_diarias.csv"
-  ARQUIVO_RECONHECIMENTO = "reconhecimento.csv"
 
   col_b1, col_b2 = st.columns(2)
 
@@ -902,15 +937,7 @@ with aba_backup:
         " seus cadastros atuais."
     )
 
-    if st.session_state.vistorias:
-      pd.DataFrame(st.session_state.vistorias).to_csv(
-          ARQUIVO_VISTORIAS, index=False
-      )
-    if st.session_state.reconhecimento:
-      pd.DataFrame(st.session_state.reconhecimento).to_csv(
-          ARQUIVO_RECONHECIMENTO, index=False
-      )
-
+    salvar_estado_local()
     arquivos_para_backup = [ARQUIVO_VISTORIAS, ARQUIVO_RECONHECIMENTO]
     arquivos_existentes = [f for f in arquivos_para_backup if os.path.exists(f)]
 
@@ -938,8 +965,7 @@ with aba_backup:
   with col_b2:
     st.markdown("### 📥 Recarregar Dados via Backup (.zip)")
     st.markdown(
-        "Se o sistema perdeu os dados, envie seu arquivo ZIP guardado para"
-        " restaurar tudo."
+        "Caso mude de dispositivo ou precise forçar a restauração de um arquivo externo:"
     )
 
     arquivo_upload = st.file_uploader(
@@ -965,11 +991,8 @@ with aba_backup:
 
           if os.path.exists(ARQUIVO_VISTORIAS):
             df_v = pd.read_csv(ARQUIVO_VISTORIAS)
-            
-            # 🛡️ PROTEÇÃO CONTRA ERRO: Se o backup antigo não tiver a coluna 'Ciclo', nós a criamos automaticamente!
             if "Ciclo" not in df_v.columns:
               df_v["Ciclo"] = "Ciclo 1"
-
             st.session_state.vistorias = df_v.to_dict("records")
             dados_carregados = True
 
@@ -979,9 +1002,9 @@ with aba_backup:
             dados_carregados = True
 
           if dados_carregados:
+            salvar_estado_local()
             st.success(
-                "✅ Sucesso absoluto! Seus dados foram recarregados para a"
-                " memória (incluindo adaptação automática para backups antigos). Atualizando tela..."
+                "✅ Sucesso absoluto! Seus dados foram recarregados e salvos localmente. Atualizando tela..."
             )
             st.rerun()
           else:

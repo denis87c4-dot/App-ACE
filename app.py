@@ -1104,6 +1104,78 @@ with aba_foto:
                                         {"text": prompt_extracao},
                                         {
                                             "inline_data": {
+
+# ==================== ABA 7: LEITURA INTELIGENTE POR FOTO ====================
+with aba_foto:
+    st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
+    st.markdown(
+        "Envie uma foto nítida do seu boletim de campo preenchido à mão. "
+        "A IA vai ler todas as linhas e cadastrar os dados automaticamente para você!"
+    )
+
+    api_key_input = st.text_input(
+        "🔑 Insira sua Chave de API do Gemini (Google AI Studio)",
+        type="password",
+        placeholder="AIzaSy...",
+        key="input_gemini_key_foto"
+    )
+
+    foto_boletim = st.file_uploader(
+        "Escolha a foto do boletim de campo (PNG, JPG, JPEG)",
+        type=["png", "jpg", "jpeg"],
+        key="upload_foto_boletim_ia"
+    )
+
+    if foto_boletim is not None:
+        st.image(foto_boletim, caption="Boletim enviado para leitura", use_container_width=True)
+
+        if st.button("🚀 Processar Foto e Inserir Todos os Lançamentos", type="primary", use_container_width=True):
+            if not api_key_input:
+                st.error("⚠️ Por favor, insira sua chave de API do Gemini para continuar.")
+            else:
+                try:
+                    import json
+                    import base64
+                    import requests
+
+                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados... (Tentando modelos disponíveis)"):
+                        image_bytes = foto_boletim.getvalue()
+                        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+                        mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
+
+                        prompt_extracao = """
+                        Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
+                        Analise esta imagem de um Resumo Diário de Serviço Antivetorial preenchido à mão.
+                        Extraia todas as linhas de vistorias preenchidas na tabela.
+                        Para cada linha, retorne estritamente um objeto JSON com os seguintes campos exatos:
+                        - "Data": string no formato DD/MM/YYYY (veja no cabeçalho do boletim, ex: "01/09/2026")
+                        - "Semana": número inteiro da semana epidemiológica (ex: 36)
+                        - "Ciclo": string (ex: "Ciclo 1")
+                        - "Quarteirao": string (do campo 'Nº do quarteirão', ex: "56")
+                        - "Lado": inteiro (ex: 3 ou 4)
+                        - "Rua": string (do campo 'Nome do Logradouro', ex: "Rua Frei Henrique")
+                        - "Casa": string (do campo 'Nº' do imóvel, ex: "21", "75C")
+                        - "Tipo Imovel": string exatos aceitos pelo app: "Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)" ou "Outros (OUT)"
+                        - "Hora": string no formato HH:MM (ex: "08:00")
+                        - "Vistoria": string exata aceita pelo app: "Normal", "Recuperada", ou "Fechada / Recusa"
+                        - "Agente": string (do campo 'Assinatura do Agente', ex: "Denison Oliveira")
+                        - "Eliminados": inteiro (0 se não houver)
+                        - "Tubitos": inteiro (0 se não houver)
+                        - "Tratados": inteiro (1 se houver marcação de tratamento, ex: Im. Trat., senão 0)
+                        - "Gramas": float (valor numérico do larvicida em gramas, ex: 12.0, senão 0.0)
+                        - "Depósitos": inteiro (0 se não houver)
+                        - "Litros": float (valor numérico se houver litros, ex: 1200.0, senão 0.0)
+
+                        Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
+                        """
+                        
+                        payload = {
+                            "contents": [
+                                {
+                                    "parts": [
+                                        {"text": prompt_extracao},
+                                        {
+                                            "inline_data": {
                                                 "mime_type": mime_type,
                                                 "data": image_base64
                                             }
@@ -1113,18 +1185,21 @@ with aba_foto:
                             ]
                         }
 
-                        # Lógica de contingência automática para contornar o Erro 503 (High Demand)
-                        modelos_para_tentar = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+                        # Modelos atualizados e compatíveis com o endpoint v1beta
+                        modelos_para_tentar = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
                         response = None
+                        erro_detalhado = ""
 
                         for modelo in modelos_para_tentar:
                             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_input}"
                             response = requests.post(url, json=payload)
                             if response.status_code == 200:
                                 break
+                            else:
+                                erro_detalhado = response.text
                         
                         if response.status_code != 200:
-                            st.error(f"❌ Erro na API do Gemini após tentar múltiplos modelos: {response.text}")
+                            st.error(f"❌ Erro na API do Gemini: {erro_detalhado}")
                         else:
                             resultado_json = response.json()
                             texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"].strip()

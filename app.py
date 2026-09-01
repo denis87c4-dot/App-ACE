@@ -1036,8 +1036,7 @@ with aba_foto:
     st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
     st.markdown(
         "Envie uma foto nítida do seu boletim de campo preenchido à mão. "
-        "A IA vai ler todas as linhas e cadastrar os dados automaticamente para você, "
-        "separando apenas o que é necessário para o sistema!"
+        "A IA vai ler todas as linhas e cadastrar os dados automaticamente para você!"
     )
 
     api_key_input = st.text_input(
@@ -1062,11 +1061,13 @@ with aba_foto:
             else:
                 try:
                     import json
-                    from google import genai
-                    from google.genai import types
+                    import google.generativeai as genai
+                    from PIL import Image
 
-                    client = genai.Client(api_key=api_key_input)
-                    image_bytes = foto_boletim.getvalue()
+                    genai.configure(api_key=api_key_input)
+                    
+                    # Carrega a imagem usando PIL para o modelo clássico
+                    imagem_pil = Image.open(foto_boletim)
 
                     prompt_extracao = """
                     Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
@@ -1095,18 +1096,11 @@ with aba_foto:
                     """
 
                     with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados..."):
-                        response = client.models.generate_content(
-                            model='gemini-2.5-flash',
-                            contents=[
-                                types.Part.from_bytes(
-                                    data=image_bytes,
-                                    mime_type=foto_boletim.type,
-                                ),
-                                prompt_extracao
-                            ]
-                        )
+                        # Usando o modelo flash de visão
+                        modelo = genai.GenerativeModel('gemini-2.5-flash')
+                        resposta = modelo.generate_content([imagem_pil, prompt_extracao])
 
-                        texto_resposta = response.text.strip()
+                        texto_resposta = resposta.text.strip()
                         if texto_resposta.startswith("```json"):
                             texto_resposta = texto_resposta[7:-3].strip()
                         elif texto_resposta.startswith("```"):
@@ -1152,4 +1146,3 @@ with aba_foto:
 
                 except Exception as e:
                     st.error(f"❌ Erro ao processar a imagem: {e}")
-

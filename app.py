@@ -60,6 +60,7 @@ def salvar_estado_local():
     aba_semanal,
     aba_backup,
     aba_reconhecimento,
+    aba_foto,
 ) = st.tabs([
     "📝 Relatório Diário",
     "🔍 Busca Avançada",
@@ -67,7 +68,9 @@ def salvar_estado_local():
     "📈 Relatório Semanal",
     "💾 Central de Backup",
     "📊 Reconhecimento & Auditoria",
+    "📸 Leitura por Foto",
 ])
+
 
 # ==================== ABA 1: RELATÓRIO DIÁRIO ====================
 with aba_cadastro:
@@ -1027,3 +1030,126 @@ with aba_backup:
             )
         except Exception as e:
           st.error(f"❌ Erro ao processar o arquivo ZIP: {e}")
+
+# ==================== ABA 7: LEITURA INTELIGENTE POR FOTO ====================
+with aba_foto:
+    st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
+    st.markdown(
+        "Envie uma foto nítida do seu boletim de campo preenchido à mão. "
+        "A IA vai ler todas as linhas e cadastrar os dados automaticamente para você, "
+        "separando apenas o que é necessário para o sistema!"
+    )
+
+    api_key_input = st.text_input(
+        "🔑 Insira sua Chave de API do Gemini (Google AI Studio)",
+        type="password",
+        placeholder="AIzaSy...",
+        key="input_gemini_key_foto"
+    )
+
+    foto_boletim = st.file_uploader(
+        "Escolha a foto do boletim de campo (PNG, JPG, JPEG)",
+        type=["png", "jpg", "jpeg"],
+        key="upload_foto_boletim_ia"
+    )
+
+    if foto_boletim is not None:
+        st.image(foto_boletim, caption="Boletim enviado para leitura", use_container_width=True)
+
+        if st.button("🚀 Processar Foto e Inserir Todos os Lançamentos", type="primary", use_container_width=True):
+            if not api_key_input:
+                st.error("⚠️ Por favor, insira sua chave de API do Gemini para continuar.")
+            else:
+                try:
+                    import json
+                    from google import genai
+                    from google.genai import types
+
+                    client = genai.Client(api_key=api_key_input)
+                    image_bytes = foto_boletim.getvalue()
+
+                    prompt_extracao = """
+                    Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
+                    Analise esta imagem de um Resumo Diário de Serviço Antivetorial preenchido à mão.
+                    Extraia todas as linhas de vistorias preenchidas na tabela.
+                    Para cada linha, retorne estritamente um objeto JSON com os seguintes campos exatos:
+                    - "Data": string no formato DD/MM/YYYY (veja no cabeçalho do boletim, ex: "01/09/2026")
+                    - "Semana": número inteiro da semana epidemiológica (ex: 36)
+                    - "Ciclo": string (ex: "Ciclo 1")
+                    - "Quarteirao": string (do campo 'Nº do quarteirão', ex: "56")
+                    - "Lado": inteiro (ex: 3 ou 4)
+                    - "Rua": string (do campo 'Nome do Logradouro', ex: "Rua Frei Henrique")
+                    - "Casa": string (do campo 'Nº' do imóvel, ex: "21", "75C")
+                    - "Tipo Imovel": string exatos aceitos pelo app: "Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)" ou "Outros (OUT)"
+                    - "Hora": string no formato HH:MM (ex: "08:00")
+                    - "Vistoria": string exata aceita pelo app: "Normal", "Recuperada", ou "Fechada / Recusa"
+                    - "Agente": string (do campo 'Assinatura do Agente', ex: "Denison Oliveira")
+                    - "Eliminados": inteiro (0 se não houver)
+                    - "Tubitos": inteiro (0 se não houver)
+                    - "Tratados": inteiro (1 se houver marcação de tratamento, ex: Im. Trat., senão 0)
+                    - "Gramas": float (valor numérico do larvicida em gramas, ex: 12.0, senão 0.0)
+                    - "Depósitos": inteiro (0 se não houver)
+                    - "Litros": float (valor numérico se houver litros, ex: 1200.0, senão 0.0)
+
+                    Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
+                    """
+
+                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados..."):
+                        response = client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=[
+                                types.Part.from_bytes(
+                                    data=image_bytes,
+                                    mime_type=foto_boletim.type,
+                                ),
+                                prompt_extracao
+                            ]
+                        )
+
+                        texto_resposta = response.text.strip()
+                        if texto_resposta.startswith("```json"):
+                            texto_resposta = texto_resposta[7:-3].strip()
+                        elif texto_resposta.startswith("```"):
+                            texto_resposta = texto_resposta[3:-3].strip()
+
+                        registros_lidos = json.loads(texto_resposta)
+
+                        if isinstance(registros_lidos, list) and len(registros_lidos) > 0:
+                            count_novos = 0
+                            for reg in registros_lidos:
+                                st.session_state.vistorias.append(reg)
+
+                                tipo_imovel = reg.get("Tipo Imovel", "Residência (RES)")
+                                res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                                if "Residência" in tipo_imovel:
+                                    res_val = 1
+                                elif "Comércio" in tipo_imovel:
+                                    com_val = 1
+                                elif "Terreno" in tipo_imovel:
+                                    tb_val = 1
+                                else:
+                                    out_val = 1
+
+                                registro_rec = {
+                                    "Quarteirao": str(reg["Quarteirao"]).strip(),
+                                    "Lado": int(reg.get("Lado", 1)),
+                                    "Residencias": res_val,
+                                    "Outros": out_val,
+                                    "TB": tb_val,
+                                    "Comercio": com_val,
+                                    "Total": 1,
+                                    "Data Registro": reg["Data"],
+                                    "Auditor": reg.get("Agente", "Geral"),
+                                }
+                                st.session_state.reconhecimento.append(registro_rec)
+                                count_novos += 1
+
+                            salvar_estado_local()
+                            st.success(f"✅ Sucesso! {count_novos} lançamentos foram lidos da foto e salvos automaticamente no sistema!")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ A IA não conseguiu identificar registros válidos nesta imagem. Tente uma foto mais iluminada e de perto.")
+
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar a imagem: {e}")
+

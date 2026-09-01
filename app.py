@@ -1064,7 +1064,7 @@ with aba_foto:
                     import base64
                     import requests
 
-                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados..."):
+                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados... (Tentando modelos disponíveis)"):
                         # Codifica a imagem em base64 para envio direto via HTTP
                         image_bytes = foto_boletim.getvalue()
                         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -1096,9 +1096,6 @@ with aba_foto:
 
                         Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
                         """
-
-                        # Atualizado para o modelo gemini-3.6-flash conforme solicitado pela API
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key_input}"
                         
                         payload = {
                             "contents": [
@@ -1116,10 +1113,18 @@ with aba_foto:
                             ]
                         }
 
-                        response = requests.post(url, json=payload)
+                        # Lógica de contingência automática para contornar o Erro 503 (High Demand)
+                        modelos_para_tentar = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+                        response = None
+
+                        for modelo in modelos_para_tentar:
+                            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_input}"
+                            response = requests.post(url, json=payload)
+                            if response.status_code == 200:
+                                break
                         
                         if response.status_code != 200:
-                            st.error(f"❌ Erro na API do Gemini: {response.text}")
+                            st.error(f"❌ Erro na API do Gemini após tentar múltiplos modelos: {response.text}")
                         else:
                             resultado_json = response.json()
                             texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"].strip()

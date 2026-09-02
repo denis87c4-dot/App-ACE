@@ -569,7 +569,7 @@ with aba_busca:
                     if "Semana" in df_filtrado.columns:
                         semanas_disponiveis = ["Todas"] + sorted(list(df_filtrado["Semana"].unique()))
                         filtro_semana = st.selectbox("Semana Epidemiológica", semanas_disponiveis, key="filtro_avancado_semana")
-                        if filtro_semana != "Todos":
+                        if filtro_semana != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Semana"] == int(filtro_semana)]
 
                 with c_f3:
@@ -1059,94 +1059,70 @@ with aba_foto:
             if not api_key_input:
                 st.error("⚠️ Por favor, insira sua chave de API do Gemini para continuar.")
             else:
-                import json
-                import base64
-                import requests
-                import time
+                try:
+                    import json
+                    import base64
+                    import requests
 
-                with st.spinner("🤖 A IA está lendo o boletim (com tentativas automáticas em caso de pico)..."):
-                    image_bytes = foto_boletim.getvalue()
-                    image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-                    mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
+                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados..."):
+                        # Codifica a imagem em base64 para envio direto via HTTP
+                        image_bytes = foto_boletim.getvalue()
+                        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+                        
+                        mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
 
-                    prompt_extracao = """
-                    Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
-                    Analise esta imagem de um Resumo Diário de Serviço Antivetorial preenchido à mão.
-                    Extraia todas as linhas de vistorias preenchidas na tabela.
-                    Para cada linha, retorne estritamente um objeto JSON com os seguintes campos exatos:
-                    - "Data": string no formato DD/MM/YYYY (veja no cabeçalho do boletim, ex: "01/09/2026")
-                    - "Semana": número inteiro da semana epidemiológica (ex: 36)
-                    - "Ciclo": string (ex: "Ciclo 1")
-                    - "Quarteirao": string (do campo 'Nº do quarteirão', ex: "56")
-                    - "Lado": inteiro (ex: 3 ou 4)
-                    - "Rua": string (do campo 'Nome do Logradouro', ex: "Rua Frei Henrique")
-                    - "Casa": string (do campo 'Nº' do imóvel, ex: "21", "75C")
-                    - "Tipo Imovel": string exatos aceitos pelo app: "Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)" ou "Outros (OUT)"
-                    - "Hora": string no formato HH:MM (ex: "08:00")
-                    - "Vistoria": string exata aceita pelo app: "Normal", "Recuperada", ou "Fechada / Recusa"
-                    - "Agente": string (do campo 'Assinatura do Agente', ex: "Denison Oliveira")
-                    - "Eliminados": inteiro (0 se não houver)
-                    - "Tubitos": inteiro (0 se não houver)
-                    - "Tratados": inteiro (1 se houver marcação de tratamento, ex: Im. Trat., senão 0)
-                    - "Gramas": float (valor numérico do larvicida em gramas, ex: 12.0, senão 0.0)
-                    - "Depósitos": inteiro (0 se não houver)
-                    - "Litros": float (valor numérico se houver litros, ex: 1200.0, senão 0.0)
+                        prompt_extracao = """
+                        Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
+                        Analise esta imagem de um Resumo Diário de Serviço Antivetorial preenchido à mão.
+                        Extraia todas as linhas de vistorias preenchidas na tabela.
+                        Para cada linha, retorne estritamente um objeto JSON com os seguintes campos exatos:
+                        - "Data": string no formato DD/MM/YYYY (veja no cabeçalho do boletim, ex: "01/09/2026")
+                        - "Semana": número inteiro da semana epidemiológica (ex: 36)
+                        - "Ciclo": string (ex: "Ciclo 1")
+                        - "Quarteirao": string (do campo 'Nº do quarteirão', ex: "56")
+                        - "Lado": inteiro (ex: 3 ou 4)
+                        - "Rua": string (do campo 'Nome do Logradouro', ex: "Rua Frei Henrique")
+                        - "Casa": string (do campo 'Nº' do imóvel, ex: "21", "75C")
+                        - "Tipo Imovel": string exatos aceitos pelo app: "Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)" ou "Outros (OUT)"
+                        - "Hora": string no formato HH:MM (ex: "08:00")
+                        - "Vistoria": string exata aceita pelo app: "Normal", "Recuperada", ou "Fechada / Recusa"
+                        - "Agente": string (do campo 'Assinatura do Agente', ex: "Denison Oliveira")
+                        - "Eliminados": inteiro (0 se não houver)
+                        - "Tubitos": inteiro (0 se não houver)
+                        - "Tratados": inteiro (1 se houver marcação de tratamento, ex: Im. Trat., senão 0)
+                        - "Gramas": float (valor numérico do larvicida em gramas, ex: 12.0, senão 0.0)
+                        - "Depósitos": inteiro (0 se não houver)
+                        - "Litros": float (valor numérico se houver litros, ex: 1200.0, senão 0.0)
 
-                    Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
-                    """
+                        Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
+                        """
 
-                    payload = {
-                        "contents": [
-                            {
-                                "parts": [
-                                    {"text": prompt_extracao},
-                                    {
-                                        "inline_data": {
-                                            "mime_type": mime_type,
-                                            "data": image_base64
+                        # Atualizado para o modelo gemini-3.6-flash conforme solicitado pela API
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key_input}"
+                        
+                        payload = {
+                            "contents": [
+                                {
+                                    "parts": [
+                                        {"text": prompt_extracao},
+                                        {
+                                            "inline_data": {
+                                                "mime_type": mime_type,
+                                                "data": image_base64
+                                            }
                                         }
-                                    }
-                                ]
-                            }
-                        ]
-                    }
+                                    ]
+                                }
+                            ]
+                        }
 
-                    # Estratégia de tentativas inteligentes: roda os modelos principais e se der 503, tenta novamente com pausas progressivas
-                    modelos_para_tentar = [
-                        "gemini-2.5-flash",
-                        "gemini-1.5-flash",
-                        "gemini-2.5-pro",
-                        "gemini-1.5-pro"
-                    ]
-                    
-                    sucesso = False
-                    resposta_final = None
-
-                    for tentativa in range(3): # Tenta até 3 ciclos completos se necessário
-                        for modelo in modelos_para_tentar:
-                            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_input}"
-                            try:
-                                response = requests.post(url, json=payload, timeout=60)
-                                if response.status_code == 200:
-                                    resposta_final = response.json()
-                                    sucesso = True
-                                    break
-                                elif response.status_code == 503:
-                                    time.sleep(2) # Pequena pausa antes de testar o próximo modelo
-                                    continue
-                                else:
-                                    continue
-                            except Exception:
-                                continue
-                        if sucesso:
-                            break
-                        time.sleep(3) # Pausa maior entre as rodadas de tentativas
-
-                    if not sucesso:
-                        st.error("❌ O servidor do Google retornou congestionamento (Erro 503). Como a foto ficou perfeita, basta aguardar 5 segundinhos e clicar no botão novamente que ela processará de primeira!")
-                    else:
-                        try:
-                            texto_resposta = resposta_final["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        response = requests.post(url, json=payload)
+                        
+                        if response.status_code != 200:
+                            st.error(f"❌ Erro na API do Gemini: {response.text}")
+                        else:
+                            resultado_json = response.json()
+                            texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"].strip()
                             
                             if texto_resposta.startswith("```json"):
                                 texto_resposta = texto_resposta[7:-3].strip()
@@ -1161,10 +1137,15 @@ with aba_foto:
                                     st.session_state.vistorias.append(reg)
 
                                     tipo_imovel = reg.get("Tipo Imovel", "Residência (RES)")
-                                    res_val = 1 if "Residência" in tipo_imovel else 0
-                                    com_val = 1 if "Comércio" in tipo_imovel else 0
-                                    tb_val = 1 if "Terreno" in tipo_imovel else 0
-                                    out_val = 0 if (res_val or com_val or tb_val) else 1
+                                    res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                                    if "Residência" in tipo_imovel:
+                                        res_val = 1
+                                    elif "Comércio" in tipo_imovel:
+                                        com_val = 1
+                                    elif "Terreno" in tipo_imovel:
+                                        tb_val = 1
+                                    else:
+                                        out_val = 1
 
                                     registro_rec = {
                                         "Quarteirao": str(reg["Quarteirao"]).strip(),
@@ -1181,10 +1162,10 @@ with aba_foto:
                                     count_novos += 1
 
                                 salvar_estado_local()
-                                st.success(f"✅ Sucesso absoluto! {count_novos} lançamentos foram lidos da foto e salvos perfeitamente!")
+                                st.success(f"✅ Sucesso! {count_novos} lançamentos foram lidos da foto e salvos automaticamente no sistema!")
                                 st.rerun()
                             else:
-                                st.warning("⚠️ A IA leu a foto mas não retornou registros válidos.")
+                                st.warning("⚠️ A IA não conseguiu identificar registros válidos nesta imagem.")
 
-                        except Exception as e:
-                            st.error(f"❌ Erro ao estruturar os dados retornados: {e}")
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar a imagem: {e}")

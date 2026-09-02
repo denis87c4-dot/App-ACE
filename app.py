@@ -6,18 +6,6 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-# ==================== VERIFICAÇÃO E INSTALAÇÃO AUTOMÁTICA DE DEPENDÊNCIAS ====================
-try:
-  import google.generativeai as genai
-except ImportError:
-  import subprocess
-  import sys
-  st.warning("⚠️ Biblioteca do Google Gemini não encontrada. Instalando automaticamente...")
-  subprocess.check_call([sys.executable, "-m", "pip", "install", "google-generativeai"])
-  import google.generativeai as genai
-
-from PIL import Image
-
 # ==================== CONFIGURAÇÃO DA PÁGINA ====================
 st.set_page_config(
     page_title="Sistema ACE - Gestão Integrada de Endemias", layout="wide"
@@ -93,6 +81,7 @@ with aba_cadastro:
       " vistoria!"
   )
 
+  # Extração segura de listas históricas para os dropdowns
   historico_quart = (
       sorted(
           list(
@@ -296,6 +285,7 @@ with aba_cadastro:
         }
         st.session_state.reconhecimento.append(registro_rec)
 
+        # 💾 SALVA AUTOMATICAMENTE NO DISCO
         salvar_estado_local()
 
         st.success(
@@ -349,6 +339,7 @@ with aba_cadastro:
         ):
           st.session_state.reconhecimento.pop(idx_selecionado)
         
+        # 💾 SALVA AUTOMATICAMENTE NO DISCO
         salvar_estado_local()
 
         st.success("✅ Registro excluído com sucesso!")
@@ -468,6 +459,7 @@ with aba_cadastro:
                 "Auditor": novo_agente_resp if novo_agente_resp else "Geral",
             }
 
+          # 💾 SALVA AUTOMATICAMENTE NO DISCO
           salvar_estado_local()
 
           st.success("✅ Registro atualizado com sucesso!")
@@ -612,6 +604,7 @@ with aba_busca:
 
                 st.markdown("---")
                 
+                # --- MÉTRICAS DESTACADAS NA FRENTE ---
                 if "Vistoria" in df_filtrado.columns:
                     total_normais = len(df_filtrado[df_filtrado["Vistoria"].str.contains("Normal", case=False, na=False)])
                     total_fechadas = len(df_filtrado[df_filtrado["Vistoria"].str.contains("Fechada", case=False, na=False)])
@@ -1038,43 +1031,45 @@ with aba_backup:
         except Exception as e:
           st.error(f"❌ Erro ao processar o arquivo ZIP: {e}")
 
-# ==================== ABA 7: LEITURA INTELIGENTE POR FOTO (SDK OFICIAL) ====================
+# ==================== ABA 7: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
-    st.subheader("📸 Leitura Inteligente de Boletim por Foto (Via SDK Oficial)")
+    st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
     st.markdown(
         "Envie uma foto nítida do seu boletim de campo preenchido à mão. "
-        "Esta aba utiliza a biblioteca oficial do Google Gemini para maior estabilidade e leitura de visão."
+        "A IA vai ler todas as linhas e cadastrar os dados automaticamente para você!"
     )
 
     api_key_input = st.text_input(
         "🔑 Insira sua Chave de API do Gemini (Google AI Studio)",
         type="password",
         placeholder="AIzaSy...",
-        key="input_gemini_key_sdk"
+        key="input_gemini_key_foto"
     )
 
     foto_boletim = st.file_uploader(
         "Escolha a foto do boletim de campo (PNG, JPG, JPEG)",
         type=["png", "jpg", "jpeg"],
-        key="upload_foto_boletim_sdk"
+        key="upload_foto_boletim_ia"
     )
 
     if foto_boletim is not None:
         st.image(foto_boletim, caption="Boletim enviado para leitura", use_container_width=True)
 
-        if st.button("🚀 Processar Foto com SDK Oficial do Google", type="primary", use_container_width=True):
+        if st.button("🚀 Processar Foto e Inserir Todos os Lançamentos", type="primary", use_container_width=True):
             if not api_key_input:
                 st.error("⚠️ Por favor, insira sua chave de API do Gemini para continuar.")
             else:
                 try:
                     import json
+                    import base64
+                    import requests
 
-                    with st.spinner("🤖 Conectando ao Gemini via SDK Oficial..."):
-                        genai.configure(api_key=api_key_input)
-
-                        img_pil = Image.open(foto_boletim)
-                        if img_pil.mode in ("RGBA", "P"):
-                            img_pil = img_pil.convert("RGB")
+                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados..."):
+                        # Codifica a imagem em base64 para envio direto via HTTP
+                        image_bytes = foto_boletim.getvalue()
+                        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+                        
+                        mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
 
                         prompt_extracao = """
                         Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
@@ -1102,52 +1097,75 @@ with aba_foto:
                         Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
                         """
 
-                        modelo = genai.GenerativeModel("gemini-2.5-flash")
-                        resposta = modelo.generate_content([prompt_extracao, img_pil])
-                        texto_resposta = resposta.text.strip()
-
-                        if texto_resposta.startswith("```json"):
-                            texto_resposta = texto_resposta[7:-3].strip()
-                        elif texto_resposta.startswith("```"):
-                            texto_resposta = texto_resposta[3:-3].strip()
-
-                        registros_lidos = json.loads(texto_resposta)
-
-                        if isinstance(registros_lidos, list) and len(registros_lidos) > 0:
-                            count_novos = 0
-                            for reg in registros_lidos:
-                                st.session_state.vistorias.append(reg)
-
-                                tipo_imovel = reg.get("Tipo Imovel", "Residência (RES)")
-                                res_val, com_val, tb_val, out_val = 0, 0, 0, 0
-                                if "Residência" in tipo_imovel:
-                                    res_val = 1
-                                elif "Comércio" in tipo_imovel:
-                                    com_val = 1
-                                elif "Terreno" in tipo_imovel:
-                                    tb_val = 1
-                                else:
-                                    out_val = 1
-
-                                registro_rec = {
-                                    "Quarteirao": str(reg["Quarteirao"]).strip(),
-                                    "Lado": int(reg.get("Lado", 1)),
-                                    "Residencias": res_val,
-                                    "Outros": out_val,
-                                    "TB": tb_val,
-                                    "Comercio": com_val,
-                                    "Total": 1,
-                                    "Data Registro": reg["Data"],
-                                    "Auditor": reg.get("Agente", "Geral"),
+                        # Atualizado para o modelo gemini-3.6-flash conforme solicitado pela API
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key_input}"
+                        
+                        payload = {
+                            "contents": [
+                                {
+                                    "parts": [
+                                        {"text": prompt_extracao},
+                                        {
+                                            "inline_data": {
+                                                "mime_type": mime_type,
+                                                "data": image_base64
+                                            }
+                                        }
+                                    ]
                                 }
-                                st.session_state.reconhecimento.append(registro_rec)
-                                count_novos += 1
+                            ]
+                        }
 
-                            salvar_estado_local()
-                            st.success(f"✅ Sucesso! {count_novos} lançamentos extraídos da foto e salvos automaticamente!")
-                            st.rerun()
+                        response = requests.post(url, json=payload)
+                        
+                        if response.status_code != 200:
+                            st.error(f"❌ Erro na API do Gemini: {response.text}")
                         else:
-                            st.warning("⚠️ A IA processou a imagem, mas não encontrou registros estruturados.")
+                            resultado_json = response.json()
+                            texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                            
+                            if texto_resposta.startswith("```json"):
+                                texto_resposta = texto_resposta[7:-3].strip()
+                            elif texto_resposta.startswith("```"):
+                                texto_resposta = texto_resposta[3:-3].strip()
+
+                            registros_lidos = json.loads(texto_resposta)
+
+                            if isinstance(registros_lidos, list) and len(registros_lidos) > 0:
+                                count_novos = 0
+                                for reg in registros_lidos:
+                                    st.session_state.vistorias.append(reg)
+
+                                    tipo_imovel = reg.get("Tipo Imovel", "Residência (RES)")
+                                    res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                                    if "Residência" in tipo_imovel:
+                                        res_val = 1
+                                    elif "Comércio" in tipo_imovel:
+                                        com_val = 1
+                                    elif "Terreno" in tipo_imovel:
+                                        tb_val = 1
+                                    else:
+                                        out_val = 1
+
+                                    registro_rec = {
+                                        "Quarteirao": str(reg["Quarteirao"]).strip(),
+                                        "Lado": int(reg.get("Lado", 1)),
+                                        "Residencias": res_val,
+                                        "Outros": out_val,
+                                        "TB": tb_val,
+                                        "Comercio": com_val,
+                                        "Total": 1,
+                                        "Data Registro": reg["Data"],
+                                        "Auditor": reg.get("Agente", "Geral"),
+                                    }
+                                    st.session_state.reconhecimento.append(registro_rec)
+                                    count_novos += 1
+
+                                salvar_estado_local()
+                                st.success(f"✅ Sucesso! {count_novos} lançamentos foram lidos da foto e salvos automaticamente no sistema!")
+                                st.rerun()
+                            else:
+                                st.warning("⚠️ A IA não conseguiu identificar registros válidos nesta imagem.")
 
                 except Exception as e:
-                    st.error(f"❌ Erro ao processar com o SDK do Gemini: {e}")
+                    st.error(f"❌ Erro ao processar a imagem: {e}")

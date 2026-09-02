@@ -1031,75 +1031,141 @@ with aba_backup:
         except Exception as e:
           st.error(f"❌ Erro ao processar o arquivo ZIP: {e}")
 
-# ==================== ABA 7: REGISTRO VIA CELULAR (MANUAL COM CÂMERA) ====================
+# ==================== ABA 7: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
-    st.subheader("📸 Registro de Boletim via Celular")
-    st.markdown("Tire uma foto nítida do boletim de campo diretamente com a câmera do seu smartphone:")
+    st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
+    st.markdown(
+        "Envie uma foto nítida do seu boletim de campo preenchido à mão. "
+        "A IA vai ler todas as linhas e cadastrar os dados automaticamente para você!"
+    )
 
-    # O Streamlit aciona a câmera nativa do celular automaticamente
-    foto_capturada = st.camera_input("Tirar foto do boletim")
+    api_key_input = st.text_input(
+        "🔑 Insira sua Chave de API do Gemini (Google AI Studio)",
+        type="password",
+        placeholder="AIzaSy...",
+        key="input_gemini_key_foto"
+    )
 
-    if foto_capturada is not None:
-        st.success("✅ Foto capturada com sucesso!")
-        
-        # Formulário para preenchimento rápido olhando a imagem acima
-        with st.form("form_dados_boletim_celular"):
-            st.markdown("### 📝 Preencha os dados da foto:")
-            
-            c_f_col1, c_f_col2 = st.columns(2)
-            with c_f_col1:
-                data_visita_cel = st.date_input("Data da Visita", value=datetime.today(), key="cel_data")
-                num_boletim = st.text_input("Número do Boletim", key="cel_bol")
-                localidade = st.text_input("Localidade / Setor / Bairro", key="cel_loc")
-                quarteirao_cel = st.text_input("Quarteirão", key="cel_quart")
-            with c_f_col2:
-                lado_cel = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1, key="cel_lado")
-                rua_cel = st.text_input("Nome da Rua / Logradouro", key="cel_rua")
-                num_casa_cel = st.text_input("Nº / Identificação do Imóvel", key="cel_casa")
-                casas_visitadas = st.number_input("Imóveis / Casas Visitadas", min_value=0, step=1, key="cel_casas_vis")
+    foto_boletim = st.file_uploader(
+        "Escolha a foto do boletim de campo (PNG, JPG, JPEG)",
+        type=["png", "jpg", "jpeg"],
+        key="upload_foto_boletim_ia"
+    )
 
-            # Botão de envio
-            enviar_dados = st.form_submit_button("💾 Salvar Dados do Boletim", use_container_width=True)
-            
-            if enviar_dados:
-                if not quarteirao_cel or not rua_cel or not num_casa_cel:
-                    st.error("⚠️ Por favor, preencha o Quarteirão, a Rua e o Número/Identificação da Casa.")
-                else:
-                    novo_registro_cel = {
-                        "Data": data_visita_cel.strftime("%d/%m/%Y"),
-                        "Semana": int(data_visita_cel.strftime("%V")),
-                        "Ciclo": "Ciclo 1",
-                        "Quarteirao": str(quarteirao_cel).strip(),
-                        "Lado": int(lado_cel),
-                        "Rua": str(rua_cel).strip(),
-                        "Casa": str(num_casa_cel).strip(),
-                        "Tipo Imovel": "Residência (RES)",
-                        "Hora": datetime.now().strftime("%H:%M"),
-                        "Vistoria": "Normal",
-                        "Agente": "Celular / Campo",
-                        "Eliminados": 0,
-                        "Tubitos": 0,
-                        "Tratados": 0,
-                        "Gramas": 0.0,
-                        "Depósitos": 0,
-                        "Litros": 0.0,
-                    }
+    if foto_boletim is not None:
+        st.image(foto_boletim, caption="Boletim enviado para leitura", use_container_width=True)
 
-                    st.session_state.vistorias.append(novo_registro_cel)
+        if st.button("🚀 Processar Foto e Inserir Todos os Lançamentos", type="primary", use_container_width=True):
+            if not api_key_input:
+                st.error("⚠️ Por favor, insira sua chave de API do Gemini para continuar.")
+            else:
+                try:
+                    import json
+                    import base64
+                    import requests
 
-                    registro_rec_cel = {
-                        "Quarteirao": str(quarteirao_cel).strip(),
-                        "Lado": int(lado_cel),
-                        "Residencias": 1,
-                        "Outros": 0,
-                        "TB": 0,
-                        "Comercio": 0,
-                        "Total": 1,
-                        "Data Registro": data_visita_cel.strftime("%d/%m/%Y"),
-                        "Auditor": "Celular / Campo",
-                    }
-                    st.session_state.reconhecimento.append(registro_rec_cel)
+                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados..."):
+                        # Codifica a imagem em base64 para envio direto via HTTP
+                        image_bytes = foto_boletim.getvalue()
+                        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+                        
+                        mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
 
-                    salvar_estado_local()
-                    st.success("🎉 Dados do boletim salvos com sucesso!")
-                    st.balloons()
+                        prompt_extracao = """
+                        Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
+                        Analise esta imagem de um Resumo Diário de Serviço Antivetorial preenchido à mão.
+                        Extraia todas as linhas de vistorias preenchidas na tabela.
+                        Para cada linha, retorne estritamente um objeto JSON com os seguintes campos exatos:
+                        - "Data": string no formato DD/MM/YYYY (veja no cabeçalho do boletim, ex: "01/09/2026")
+                        - "Semana": número inteiro da semana epidemiológica (ex: 36)
+                        - "Ciclo": string (ex: "Ciclo 1")
+                        - "Quarteirao": string (do campo 'Nº do quarteirão', ex: "56")
+                        - "Lado": inteiro (ex: 3 ou 4)
+                        - "Rua": string (do campo 'Nome do Logradouro', ex: "Rua Frei Henrique")
+                        - "Casa": string (do campo 'Nº' do imóvel, ex: "21", "75C")
+                        - "Tipo Imovel": string exatos aceitos pelo app: "Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)" ou "Outros (OUT)"
+                        - "Hora": string no formato HH:MM (ex: "08:00")
+                        - "Vistoria": string exata aceita pelo app: "Normal", "Recuperada", ou "Fechada / Recusa"
+                        - "Agente": string (do campo 'Assinatura do Agente', ex: "Denison Oliveira")
+                        - "Eliminados": inteiro (0 se não houver)
+                        - "Tubitos": inteiro (0 se não houver)
+                        - "Tratados": inteiro (1 se houver marcação de tratamento, ex: Im. Trat., senão 0)
+                        - "Gramas": float (valor numérico do larvicida em gramas, ex: 12.0, senão 0.0)
+                        - "Depósitos": inteiro (0 se não houver)
+                        - "Litros": float (valor numérico se houver litros, ex: 1200.0, senão 0.0)
+
+                        Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
+                        """
+
+                        # Atualizado para o modelo gemini-3.6-flash conforme solicitado pela API
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key_input}"
+                        
+                        payload = {
+                            "contents": [
+                                {
+                                    "parts": [
+                                        {"text": prompt_extracao},
+                                        {
+                                            "inline_data": {
+                                                "mime_type": mime_type,
+                                                "data": image_base64
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+
+                        response = requests.post(url, json=payload)
+                        
+                        if response.status_code != 200:
+                            st.error(f"❌ Erro na API do Gemini: {response.text}")
+                        else:
+                            resultado_json = response.json()
+                            texto_resposta = resultado_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                            
+                            if texto_resposta.startswith("```json"):
+                                texto_resposta = texto_resposta[7:-3].strip()
+                            elif texto_resposta.startswith("```"):
+                                texto_resposta = texto_resposta[3:-3].strip()
+
+                            registros_lidos = json.loads(texto_resposta)
+
+                            if isinstance(registros_lidos, list) and len(registros_lidos) > 0:
+                                count_novos = 0
+                                for reg in registros_lidos:
+                                    st.session_state.vistorias.append(reg)
+
+                                    tipo_imovel = reg.get("Tipo Imovel", "Residência (RES)")
+                                    res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                                    if "Residência" in tipo_imovel:
+                                        res_val = 1
+                                    elif "Comércio" in tipo_imovel:
+                                        com_val = 1
+                                    elif "Terreno" in tipo_imovel:
+                                        tb_val = 1
+                                    else:
+                                        out_val = 1
+
+                                    registro_rec = {
+                                        "Quarteirao": str(reg["Quarteirao"]).strip(),
+                                        "Lado": int(reg.get("Lado", 1)),
+                                        "Residencias": res_val,
+                                        "Outros": out_val,
+                                        "TB": tb_val,
+                                        "Comercio": com_val,
+                                        "Total": 1,
+                                        "Data Registro": reg["Data"],
+                                        "Auditor": reg.get("Agente", "Geral"),
+                                    }
+                                    st.session_state.reconhecimento.append(registro_rec)
+                                    count_novos += 1
+
+                                salvar_estado_local()
+                                st.success(f"✅ Sucesso! {count_novos} lançamentos foram lidos da foto e salvos automaticamente no sistema!")
+                                st.rerun()
+                            else:
+                                st.warning("⚠️ A IA não conseguiu identificar registros válidos nesta imagem.")
+
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar a imagem: {e}")

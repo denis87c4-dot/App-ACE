@@ -569,7 +569,7 @@ with aba_busca:
                     if "Semana" in df_filtrado.columns:
                         semanas_disponiveis = ["Todas"] + sorted(list(df_filtrado["Semana"].unique()))
                         filtro_semana = st.selectbox("Semana Epidemiológica", semanas_disponiveis, key="filtro_avancado_semana")
-                        if filtro_semana != "Todas":
+                        if filtro_semana != "Todos":
                             df_filtrado = df_filtrado[df_filtrado["Semana"] == int(filtro_semana)]
 
                 with c_f3:
@@ -1064,7 +1064,7 @@ with aba_foto:
                 import requests
                 import time
 
-                with st.spinner("🤖 A IA está lendo o boletim (garantindo estabilidade)..."):
+                with st.spinner("🤖 A IA está lendo o boletim (com tentativas automáticas em caso de pico)..."):
                     image_bytes = foto_boletim.getvalue()
                     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
                     mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
@@ -1111,7 +1111,7 @@ with aba_foto:
                         ]
                     }
 
-                    # Lista inteligente de modelos para alternar automaticamente se houver erro 503
+                    # Estratégia de tentativas inteligentes: roda os modelos principais e se der 503, tenta novamente com pausas progressivas
                     modelos_para_tentar = [
                         "gemini-2.5-flash",
                         "gemini-1.5-flash",
@@ -1122,25 +1122,28 @@ with aba_foto:
                     sucesso = False
                     resposta_final = None
 
-                    for modelo in modelos_para_tentar:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_input}"
-                        
-                        try:
-                            response = requests.post(url, json=payload, timeout=60)
-                            if response.status_code == 200:
-                                resposta_final = response.json()
-                                sucesso = True
-                                break
-                            elif response.status_code == 503:
-                                time.sleep(1)
+                    for tentativa in range(3): # Tenta até 3 ciclos completos se necessário
+                        for modelo in modelos_para_tentar:
+                            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_input}"
+                            try:
+                                response = requests.post(url, json=payload, timeout=60)
+                                if response.status_code == 200:
+                                    resposta_final = response.json()
+                                    sucesso = True
+                                    break
+                                elif response.status_code == 503:
+                                    time.sleep(2) # Pequena pausa antes de testar o próximo modelo
+                                    continue
+                                else:
+                                    continue
+                            except Exception:
                                 continue
-                            else:
-                                continue
-                        except Exception:
-                            continue
+                        if sucesso:
+                            break
+                        time.sleep(3) # Pausa maior entre as rodadas de tentativas
 
                     if not sucesso:
-                        st.error("❌ Servidores sobrecarregados (Erro 503). Como a leitura por foto é pesada, basta aguardar 5 segundinhos e clicar no botão de novo que ele passa.")
+                        st.error("❌ O servidor do Google retornou congestionamento (Erro 503). Como a foto ficou perfeita, basta aguardar 5 segundinhos e clicar no botão novamente que ela processará de primeira!")
                     else:
                         try:
                             texto_resposta = resposta_final["candidates"][0]["content"]["parts"][0]["text"].strip()

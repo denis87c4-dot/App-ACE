@@ -5,7 +5,6 @@ import zipfile
 import altair as alt
 import pandas as pd
 import streamlit as st
-from PIL import Image as PILImage
 
 # ==================== CONFIGURAÇÃO DA PÁGINA ====================
 st.set_page_config(
@@ -570,7 +569,7 @@ with aba_busca:
                     if "Semana" in df_filtrado.columns:
                         semanas_disponiveis = ["Todas"] + sorted(list(df_filtrado["Semana"].unique()))
                         filtro_semana = st.selectbox("Semana Epidemiológica", semanas_disponiveis, key="filtro_avancado_semana")
-                        if filtro_semana != "Todos":
+                        if filtro_semana != "Todas":
                             df_filtrado = df_filtrado[df_filtrado["Semana"] == int(filtro_semana)]
 
                 with c_f3:
@@ -1065,25 +1064,12 @@ with aba_foto:
                     import base64
                     import requests
 
-                    with st.spinner("🤖 A IA está otimizando a imagem e lendo o boletim..."):
-                        # Carrega e otimiza a imagem automaticamente via PIL (Pillow)
-                        imagem_pil = PILImage.open(foto_boletim)
-                        
-                        # Converte para RGB se estiver em RGBA/P
-                        if imagem_pil.mode in ("RGBA", "P"):
-                            imagem_pil = imagem_pil.convert("RGB")
-                            
-                        # Redimensiona se a largura ou altura máxima for muito grande (otimização para a API)
-                        max_dim = 1600
-                        if max(imagem_pil.size) > max_dim:
-                            imagem_pil.thumbnail((max_dim, max_dim), PILImage.Resampling.LANCZOS)
-                            
-                        buffer_img = io.BytesIO()
-                        imagem_pil.save(buffer_img, format="JPEG", quality=85)
-                        image_bytes = buffer_img.getvalue()
-                        
+                    with st.spinner("🤖 A IA está lendo o boletim e estruturando os dados..."):
+                        # Codifica a imagem em base64 para envio direto via HTTP
+                        image_bytes = foto_boletim.getvalue()
                         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-                        mime_type = "image/jpeg"
+                        
+                        mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
 
                         prompt_extracao = """
                         Você é um especialista em digitalização de boletins de campo do PNCD (Controle de Endemias).
@@ -1111,6 +1097,7 @@ with aba_foto:
                         Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
                         """
 
+                        # Atualizado para o modelo gemini-3.6-flash conforme solicitado pela API
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key_input}"
                         
                         payload = {

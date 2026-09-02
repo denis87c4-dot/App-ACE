@@ -1097,8 +1097,8 @@ with aba_foto:
                         Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
                         """
 
-                        # URL corrigida para o modelo estável gemini-1.5-flash
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key_input}"
+                        # URL atualizada para o modelo estável gemini-2.5-flash
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key_input}"
                         
                         payload = {
                             "contents": [

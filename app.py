@@ -1064,8 +1064,7 @@ with aba_foto:
                 import requests
                 import time
 
-                with st.spinner("🤖 A IA está lendo o boletim (tentando contornar instabilidades de rede)..."):
-                    # Codifica a imagem em base64
+                with st.spinner("🤖 A IA está lendo o boletim (garantindo estabilidade)..."):
                     image_bytes = foto_boletim.getvalue()
                     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
                     mime_type = foto_boletim.type if foto_boletim.type else "image/jpeg"
@@ -1096,11 +1095,6 @@ with aba_foto:
                     Retorne APENAS um array JSON válido (começando com [ e terminando com ]) contendo esses objetos, sem markdown extra ou explicações.
                     """
 
-                    # Lista de modelos para fallback automático caso ocorra erro 503 de alta demanda
-                    modelos_para_tentar = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
-                    sucesso = False
-                    resposta_final = None
-
                     payload = {
                         "contents": [
                             {
@@ -1117,29 +1111,36 @@ with aba_foto:
                         ]
                     }
 
+                    # Lista inteligente de modelos para alternar automaticamente se houver erro 503
+                    modelos_para_tentar = [
+                        "gemini-2.5-flash",
+                        "gemini-1.5-flash",
+                        "gemini-2.5-pro",
+                        "gemini-1.5-pro"
+                    ]
+                    
+                    sucesso = False
+                    resposta_final = None
+
                     for modelo in modelos_para_tentar:
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key_input}"
                         
-                        # Tenta até 2 vezes por modelo com pequenas pausas
-                        for tentativa in range(2):
-                            try:
-                                response = requests.post(url, json=payload, timeout=30)
-                                if response.status_code == 200:
-                                    resposta_final = response.json()
-                                    sucesso = True
-                                    break
-                                elif response.status_code == 503:
-                                    time.sleep(2)
-                                else:
-                                    break
-                            except Exception:
+                        try:
+                            response = requests.post(url, json=payload, timeout=60)
+                            if response.status_code == 200:
+                                resposta_final = response.json()
+                                sucesso = True
+                                break
+                            elif response.status_code == 503:
                                 time.sleep(1)
-                        
-                        if sucesso:
-                            break
+                                continue
+                            else:
+                                continue
+                        except Exception:
+                            continue
 
                     if not sucesso:
-                        st.error("❌ Os servidores do Gemini estão enfrentando pico de alta demanda no momento (Erro 503). Por favor, aguarde alguns segundos e clique no botão novamente.")
+                        st.error("❌ Servidores sobrecarregados (Erro 503). Como a leitura por foto é pesada, basta aguardar 5 segundinhos e clicar no botão de novo que ele passa.")
                     else:
                         try:
                             texto_resposta = resposta_final["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -1157,15 +1158,10 @@ with aba_foto:
                                     st.session_state.vistorias.append(reg)
 
                                     tipo_imovel = reg.get("Tipo Imovel", "Residência (RES)")
-                                    res_val, com_val, tb_val, out_val = 0, 0, 0, 0
-                                    if "Residência" in tipo_imovel:
-                                        res_val = 1
-                                    elif "Comércio" in tipo_imovel:
-                                        com_val = 1
-                                    elif "Terreno" in tipo_imovel:
-                                        tb_val = 1
-                                    else:
-                                        out_val = 1
+                                    res_val = 1 if "Residência" in tipo_imovel else 0
+                                    com_val = 1 if "Comércio" in tipo_imovel else 0
+                                    tb_val = 1 if "Terreno" in tipo_imovel else 0
+                                    out_val = 0 if (res_val or com_val or tb_val) else 1
 
                                     registro_rec = {
                                         "Quarteirao": str(reg["Quarteirao"]).strip(),
@@ -1182,10 +1178,10 @@ with aba_foto:
                                     count_novos += 1
 
                                 salvar_estado_local()
-                                st.success(f"✅ Sucesso! {count_novos} lançamentos foram lidos da foto e salvos automaticamente no sistema!")
+                                st.success(f"✅ Sucesso absoluto! {count_novos} lançamentos foram lidos da foto e salvos perfeitamente!")
                                 st.rerun()
                             else:
-                                st.warning("⚠️ A IA não conseguiu identificar registros válidos nesta imagem.")
+                                st.warning("⚠️ A IA leu a foto mas não retornou registros válidos.")
 
                         except Exception as e:
-                            st.error(f"❌ Erro ao interpretar a resposta da IA: {e}")
+                            st.error(f"❌ Erro ao estruturar os dados retornados: {e}")

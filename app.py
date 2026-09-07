@@ -258,17 +258,56 @@ with aba_busca:
 
 # ==================== ABA 3: GERENCIAR LANÇAMENTOS ====================
 with aba_gerenciar:
-    st.subheader("✏️ Gerenciamento Individual de Lançamentos (Editar / Deletar)")
-    st.markdown("Selecione um lançamento abaixo para inspecionar os detalhes, alterá-lo ou excluí-lo individualmente.")
+    st.subheader("✏️ Gerenciamento e Edição Inteligente em Massa")
+    st.markdown("Aqui você pode alterar um dado incorreto (como um quarteirão inteiro ou agente) **em todos os registros de uma só vez**, ou gerenciar lançamentos individualmente.")
 
     if st.session_state.vistorias:
+        # ---- FERRAMENTA DE EDIÇÃO INTELIGENTE EM MASSA ----
+        with st.expander("⚡ Alteração Rápida em Massa (Modificar todos de uma vez)", expanded=True):
+            st.markdown("Use esta ferramenta para corrigir um erro comum de digitação (ex: trocar Quarteirão '03' por '01' em todos os registros instantaneamente).")
+            
+            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+            with col_m1:
+                coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"], key="massa_coluna")
+            with col_m2:
+                valor_antigo = st.text_input("Valor antigo (o que está errado)", placeholder="Ex: 03")
+            with col_m3:
+                valor_novo = st.text_input("Novo valor (o correto)", placeholder="Ex: 01")
+            with col_m4:
+                st.markdown("<br>", unsafe_allow_html=True)
+                btn_aplicar_massa = st.button("🚀 Aplicar em Massa", type="primary", use_container_width=True)
+
+            if btn_aplicar_massa:
+                if not valor_antigo:
+                    st.warning("⚠️ Informe o valor antigo que deseja substituir.")
+                else:
+                    alterados = 0
+                    # Atualiza vistorias
+                    for item in st.session_state.vistorias:
+                        if str(item.get(coluna_alvo)) == str(valor_antigo).strip():
+                            item[coluna_alvo] = valor_novo
+                            alterados += 1
+                    
+                    # Atualiza reconhecimento também se for Quarteirão, Data ou Semana
+                    if coluna_alvo in ["Quarteirao", "Data", "Semana"]:
+                        for item_r in st.session_state.reconhecimento:
+                            if str(item_r.get(coluna_alvo)) == str(valor_antigo).strip():
+                                item_r[coluna_alvo] = valor_novo
+
+                    salvar_estado_local()
+                    st.success(f"✅ Sucesso! {alterados} registros tiveram a coluna **{coluna_alvo}** alterada de **'{valor_antigo}'** para **'{valor_novo}'**.")
+                    st.rerun()
+
+        st.markdown("---")
+        st.subheader("🔍 Gerenciamento Individual (Editar ou Excluir por Imóvel)")
+        
         opcoes_lancamentos = []
         for idx, item in enumerate(st.session_state.vistorias):
             rotulo = f"[{idx}] Data: {item.get('Data')} | Quarteirão: {item.get('Quarteirao')} | Rua: {item.get('Rua')} | Nº: {item.get('Casa')} | Agente: {item.get('Agente')}"
             opcoes_lancamentos.append((idx, rotulo))
 
         lancamento_selecionado_label = st.selectbox(
-            "🔎 Escolha o lançamento pelo imóvel/endereço:",
+            "🔎 Escolha o lançamento específico:",
             options=[opt[1] for opt in opcoes_lancamentos],
             key="select_gerenciar_lancamento"
         )
@@ -276,7 +315,6 @@ with aba_gerenciar:
         idx_selecionado = next(opt[0] for opt in opcoes_lancamentos if opt[1] == lancamento_selecionado_label)
         registro_atual = st.session_state.vistorias[idx_selecionado]
 
-        st.markdown("---")
         col_acoes1, col_acoes2 = st.columns(2)
         with col_acoes1:
             if st.button("🗑️ Deletar Este Lançamento Permanentemente", type="primary", use_container_width=True):
@@ -285,7 +323,6 @@ with aba_gerenciar:
                 st.success("✅ Registro excluído com sucesso!")
                 st.rerun()
 
-        st.markdown("### 📝 Editar Dados do Lançamento Selecionado")
         with st.form("form_editar_lancamento"):
             ec1, ec2, ec3 = st.columns(3)
             with ec1:
@@ -316,7 +353,7 @@ with aba_gerenciar:
             with ec6: novos_depositos = st.number_input("Depósitos", min_value=0, value=int(registro_atual.get("Depósitos", 0)))
             novos_litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=float(registro_atual.get("Litros", 0.0)))
 
-            btn_salvar_edicao = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
+            btn_salvar_edicao = st.form_submit_button("💾 Salvar Alterações deste Imóvel", use_container_width=True)
             if btn_salvar_edicao:
                 st.session_state.vistorias[idx_selecionado] = {
                     "Data": nova_data,
@@ -487,7 +524,6 @@ with aba_reconhecimento:
     if st.session_state.reconhecimento:
         df_rec = pd.DataFrame(st.session_state.reconhecimento)
 
-        # Garante colunas básicas caso venham vazias
         for col in ["Quarteirao", "Residencias", "Outros", "TB", "Comercio", "Total", "Data", "Semana"]:
             if col not in df_rec.columns:
                 if col in ["Residencias", "Outros", "TB", "Comercio", "Total", "Semana"]:
@@ -507,7 +543,6 @@ with aba_reconhecimento:
                 quarts_disp = ["Todos"] + sorted(df_rec["Quarteirao"].unique().tolist())
                 filtro_quart_rec = st.selectbox("🏘️ Filtrar por Quarteirão", quarts_disp, key="rec_filtro_quart")
 
-        # Aplicando os filtros na base de reconhecimento
         if filtro_data_rec != "Todas":
             df_rec = df_rec[df_rec["Data"] == filtro_data_rec]
         if filtro_semana_rec != "Todas":
@@ -516,7 +551,6 @@ with aba_reconhecimento:
             df_rec = df_rec[df_rec["Quarteirao"] == filtro_quart_rec]
 
         if not df_rec.empty:
-            # Agrupando por quarteirão, data e semana para exibir exatamente o que foi solicitado
             df_rec_agrupado = df_rec.groupby(["Quarteirao", "Data", "Semana"]).agg(
                 Residencias=("Residencias", "sum"),
                 Outros=("Outros", "sum"),
@@ -525,10 +559,8 @@ with aba_reconhecimento:
                 Total=("Total", "sum")
             ).reset_index()
 
-            # Ordena por quarteirão
             df_rec_agrupado = df_rec_agrupado.sort_values(by="Quarteirao")
 
-            # Exibição de Métricas Gerais do Recorte Filtrado
             rm1, rm2, rm3, rm4, rm5 = st.columns(5)
             rm1.metric("🏠 Total Residências", int(df_rec_agrupado["Residencias"].sum()))
             rm2.metric("🏢 Total Comércios", int(df_rec_agrupado["Comercio"].sum()))

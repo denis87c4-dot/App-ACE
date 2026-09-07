@@ -1148,24 +1148,39 @@ with aba_foto:
                                         out_val = 1
 
                                     registro_rec = {
-                                        "Quarteirao": str(reg["Quarteirao"]).strip(),
-                                        "Lado": int(reg.get("Lado", 1)),
-                                        "Residencias": res_val,
-                                        "Outros": out_val,
-                                        "TB": tb_val,
-                                        "Comercio": com_val,
-                                        "Total": 1,
-                                        "Data Registro": reg["Data"],
-                                        "Auditor": reg.get("Agente", "Geral"),
-                                    }
-                                    st.session_state.reconhecimento.append(registro_rec)
-                                    count_novos += 1
+# ==================== ABA 7: LEITURA POR FOTO ====================
+with aba_foto:
+    st.subheader("📸 Upload de Foto / Boletim")
+    st.markdown(
+        "Carregue aqui a foto do boletim ou documento em alta resolução. "
+        "O sistema exibirá a imagem e permitirá salvar localmente."
+    )
 
-                                salvar_estado_local()
-                                st.success(f"✅ Sucesso! {count_novos} lançamentos foram lidos da foto e salvos automaticamente no sistema!")
-                                st.rerun()
-                            else:
-                                st.warning("⚠️ A IA não conseguiu identificar registros válidos nesta imagem.")
+    foto = st.file_uploader(
+        "Selecione a foto (PNG, JPG, JPEG)",
+        type=["png", "jpg", "jpeg"],
+        key="upload_foto_boletim"
+    )
 
-                except Exception as e:
-                    st.error(f"❌ Erro ao processar a imagem: {e}")
+    if foto:
+        from PIL import Image
+        import os
+
+        # Criar pasta 'fotos' se não existir
+        os.makedirs("fotos", exist_ok=True)
+
+        # Abrir e exibir a imagem
+        img = Image.open(foto)
+        st.success("✅ Foto carregada com sucesso!")
+        st.image(img, use_column_width=True)
+
+        # Salvar no disco com o mesmo nome do arquivo
+        caminho_foto = os.path.join("fotos", foto.name)
+        img.save(caminho_foto)
+        st.info(f"📂 Foto salva em: {caminho_foto}")
+
+        # Vincular automaticamente ao último registro diário
+        if "vistorias" in st.session_state and st.session_state.vistorias:
+            st.session_state.vistorias[-1]["Foto"] = caminho_foto
+            salvar_estado_local()
+            st.success("🔗 Foto vinculada ao último registro diário!")

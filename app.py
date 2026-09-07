@@ -65,7 +65,7 @@ def salvar_estado_local():
     aba_foto,
 ) = st.tabs([
     "📝 Relatório Diário",
-    "🔍 Busca Avançada",
+    "🔍 Busca Avançada & Edição",
     "✏️ Gerenciar Lançamentos",
     "🧪 Análise de Tratamentos",
     "🚪 Imóveis Fechados & Recusas",
@@ -212,11 +212,18 @@ with aba_cadastro:
     m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
-# ==================== ABA 2: BUSCA AVANÇADA ====================
+# ==================== ABA 2: BUSCA AVANÇADA COM EDIÇÃO ESTILO EXCEL ====================
 with aba_busca:
-    st.subheader("🔍 Busca Avançada e Filtros Poderosos")
+    st.subheader("🔍 Busca Avançada e Edição Direta (Estilo Planilha)")
+    st.markdown("Use os filtros para encontrar os lançamentos. **Clique na célula que deseja alterar, digite o novo valor e pressione Enter**. Depois, clique no botão salvar abaixo!")
+
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
+
+        # Tratamento preventivo para garantir tipos editáveis na tabela interativa
+        for col in df_base.columns:
+            if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
+                df_base[col] = df_base[col].astype(str)
 
         with st.expander("🎛️ Filtros Avançados", expanded=True):
             fc1, fc2, fc3, fc4 = st.columns(4)
@@ -224,7 +231,7 @@ with aba_busca:
                 ciclos_disp = ["Todos"] + sorted(df_base["Ciclo"].unique().tolist()) if "Ciclo" in df_base.columns else ["Todos"]
                 filtro_ciclo = st.selectbox("Filtrar por Ciclo", ciclos_disp, key="busca_ciclo")
             with fc2:
-                semanas_disp = ["Todas"] + sorted(df_base["Semana"].unique().tolist()) if "Semana" in df_base.columns else ["Todas"]
+                semanas_disp = ["Todas"] + sorted(df_base["Semana"].astype(str).unique().tolist()) if "Semana" in df_base.columns else ["Todas"]
                 filtro_semana = st.selectbox("Filtrar por Semana", semanas_disp, key="busca_semana")
             with fc3:
                 tipos_disp = ["Todos"] + sorted(df_base["Tipo Imovel"].unique().tolist()) if "Tipo Imovel" in df_base.columns else ["Todos"]
@@ -235,24 +242,50 @@ with aba_busca:
 
         termo = st.text_input("🔎 Pesquisa rápida por termo (Rua, Número, Agente, etc.):", placeholder="Ex: 325, Rua da Palmeira, Denison...")
 
+        # Aplicação dos Filtros visuais
+        df_filtrado = df_base.copy()
         if filtro_ciclo != "Todos":
-            df_base = df_base[df_base["Ciclo"] == filtro_ciclo]
+            df_filtrado = df_filtrado[df_filtrado["Ciclo"] == filtro_ciclo]
         if filtro_semana != "Todas":
-            df_base = df_base[df_base["Semana"] == filtro_semana]
+            df_filtrado = df_filtrado[df_filtrado["Semana"].astype(str) == str(filtro_semana)]
         if filtro_tipo != "Todos":
-            df_base = df_base[df_base["Tipo Imovel"] == filtro_tipo]
+            df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"] == filtro_tipo]
         if filtro_cond != "Todas":
-            df_base = df_base[df_base["Vistoria"] == filtro_cond]
+            df_filtrado = df_filtrado[df_filtrado["Vistoria"] == filtro_cond]
 
         if termo:
-            mask = df_base.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
-            df_base = df_base[mask]
+            mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
+            df_filtrado = df_filtrado[mask]
 
-        st.info(f"Exibindo **{len(df_base)}** registros correspondentes aos filtros.")
-        st.dataframe(df_base, use_container_width=True)
-        
-        csv_exp = df_base.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Baixar CSV Filtrado", data=csv_exp, file_name="vistorias_filtradas.csv", mime="text/csv")
+        st.info(f"Exibindo **{len(df_filtrado)}** registros correspondentes. Clique na célula, digite e aperte Enter:")
+
+        # Tabela interativa tipo Excel otimizada
+        df_editado = st.data_editor(
+            df_filtrado,
+            use_container_width=True,
+            num_rows="dynamic",
+            key="editor_busca_excel"
+        )
+
+        col_b_salvar, col_b_down = st.columns(2)
+        with col_b_salvar:
+            if st.button("💾 Salvar Alterações Feitas na Tabela", type="primary", use_container_width=True, key="btn_salvar_tabela_busca"):
+                novos_dados_filtrados = df_editado.to_dict("records")
+                
+                if len(df_filtrado) == len(st.session_state.vistorias):
+                    st.session_state.vistorias = novos_dados_filtrados
+                else:
+                    indices_originais = df_filtrado.index.tolist()
+                    for idx_orig, novo_row in zip(indices_originais, novos_dados_filtrados):
+                        st.session_state.vistorias[idx_orig] = novo_row
+
+                salvar_estado_local()
+                st.success("✅ Alterações salvas com sucesso!")
+                st.rerun()
+
+        with col_b_down:
+            csv_exp = df_filtrado.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Baixar CSV Filtrado", data=csv_exp, file_name="vistorias_filtradas.csv", mime="text/csv", use_container_width=True)
     else:
         st.info("Nenhum registro cadastrado.")
 

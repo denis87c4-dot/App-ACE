@@ -245,8 +245,8 @@ with aba_semanal:
 
 # ==================== ABA 5: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
 with aba_backup:
-  st.subheader("🔐 Central de Segurança, Backup e Importação de CSV")
-  st.markdown("Baixe seus dados em ZIP ou **importe arquivos CSV avulsos** gerados pelas fotos rapidamente.")
+  st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
+  st.markdown("Aqui você pode exportar sua base completa ou **enviar arquivos de boletim em qualquer formato** (`.csv`, `.txt`, etc.).")
 
   col_b1, col_b2 = st.columns(2)
 
@@ -258,14 +258,15 @@ with aba_backup:
         st.download_button("📥 Baixar vistorias_diarias.csv", data=f, file_name="vistorias_diarias.csv", mime="text/csv", use_container_width=True)
 
   with col_b2:
-    st.markdown("### 📥 Importar CSV em Massa (Via Foto/IA)")
-    st.markdown("Suba um arquivo `.csv` formatado com as vistorias extraídas:")
-    csv_upload = st.file_uploader("Enviar arquivo .csv de vistorias", type="csv", key="upload_csv_avulso")
+    st.markdown("### 📥 Importação em Massa (Múltiplos Formatos)")
+    # Aceita explicitamente csv, txt e arquivos genéricos para nunca dar erro no celular/PC
+    arquivo_upload = st.file_uploader("Enviar arquivo de boletim", type=["csv", "txt", "dat"], key="upload_flexivel")
 
-    if csv_upload is not None:
-      if st.button("🔄 Adicionar Lançamentos do CSV à Base", type="primary", use_container_width=True):
+    if arquivo_upload is not None:
+      if st.button("🔄 Processar e Inserir na Base", type="primary", use_container_width=True):
         try:
-          df_novo_csv = pd.read_csv(csv_upload)
+          # Tenta ler o arquivo independente de ser csv ou txt estruturado
+          df_novo_csv = pd.read_csv(arquivo_upload)
           registros_novos = df_novo_csv.to_dict("records")
           
           for r in registros_novos:
@@ -293,7 +294,7 @@ with aba_backup:
           st.success(f"✅ {len(registros_novos)} registros importados com sucesso! Atualizando...")
           st.rerun()
         except Exception as e:
-          st.error(f"❌ Erro ao importar CSV: {e}")
+          st.error(f"❌ Erro ao ler o arquivo: {e}. Verifique se o formato das colunas está correto.")
 
 # ==================== ABA 6: RECONHECIMENTO ====================
 with aba_reconhecimento:
@@ -307,7 +308,7 @@ with aba_reconhecimento:
 # ==================== ABA 7: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
     st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
-    st.markdown("Envie a foto do seu boletim. A IA extrairá os dados e gerará um botão para baixar o **CSV pronto para importação**!")
+    st.markdown("Envie a foto do seu boletim. A IA extrairá os dados e gerará um botão para baixar o arquivo pronto para importação!")
 
     api_key_input = st.text_input("🔑 Chave de API do Gemini", type="password", key="input_gemini_key_foto")
     foto_boletim = st.file_uploader("Foto do boletim", type=["png", "jpg", "jpeg"], key="upload_foto_boletim_ia")
@@ -315,7 +316,7 @@ with aba_foto:
     if foto_boletim is not None:
         st.image(foto_boletim, caption="Boletim enviado", use_container_width=True)
 
-        if st.button("🚀 Processar Foto e Gerar CSV", type="primary", use_container_width=True):
+        if st.button("🚀 Processar Foto e Gerar Arquivo", type="primary", use_container_width=True):
             if not api_key_input:
                 st.error("Insira sua chave de API do Gemini.")
             else:
@@ -369,11 +370,12 @@ with aba_foto:
                             st.success("✅ Leitura realizada com sucesso abaixo!")
                             st.dataframe(df_lido, use_container_width=True)
 
+                            # Gera dados em formato CSV para download limpo
                             csv_data = df_lido.to_csv(index=False).encode('utf-8')
                             st.download_button(
-                                label="📥 Baixar CSV deste Boletim (Para Importar na Central de Backup)",
+                                label="📥 Baixar Arquivo do Boletim (Para Importar na Central de Backup)",
                                 data=csv_data,
-                                file_name="boletim_lido_ia.csv",
+                                file_name="boletim_lido.csv",
                                 mime="text/csv",
                                 type="primary"
                             )

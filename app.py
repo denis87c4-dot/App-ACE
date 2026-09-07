@@ -220,7 +220,6 @@ with aba_busca:
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
 
-        # Tratamento preventivo para garantir tipos editáveis na tabela interativa
         for col in df_base.columns:
             if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
                 df_base[col] = df_base[col].astype(str)
@@ -242,7 +241,6 @@ with aba_busca:
 
         termo = st.text_input("🔎 Pesquisa rápida por termo (Rua, Número, Agente, etc.):", placeholder="Ex: 325, Rua da Palmeira, Denison...")
 
-        # Aplicação dos Filtros visuais
         df_filtrado = df_base.copy()
         if filtro_ciclo != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Ciclo"] == filtro_ciclo]
@@ -259,7 +257,6 @@ with aba_busca:
 
         st.info(f"Exibindo **{len(df_filtrado)}** registros correspondentes. Clique na célula, digite e aperte Enter:")
 
-        # Tabela interativa tipo Excel otimizada
         df_editado = st.data_editor(
             df_filtrado,
             use_container_width=True,
@@ -510,7 +507,7 @@ with aba_semanal:
 # ==================== ABA 7: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
 with aba_backup:
   st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
-  st.markdown("Aqui você pode exportar sua base completa ou **enviar arquivos de boletim em qualquer formato** (`.csv`, `.txt`, etc.).")
+  st.markdown("Aqui você pode exportar sua base completa, enviar arquivos ou limpar todos os dados do sistema.")
 
   col_b1, col_b2 = st.columns(2)
 
@@ -558,6 +555,26 @@ with aba_backup:
           st.rerun()
         except Exception as e:
           st.error(f"❌ Erro ao ler o arquivo: {e}. Verifique se o formato das colunas está correto.")
+
+  st.markdown("---")
+  st.markdown("### ⚠️ Zona de Perigo / Limpeza Geral")
+  
+  confirmar_limpeza = st.checkbox("Confirmo que desejo apagar absolutamente todos os lançamentos e reconhecimentos geográficos salvos.", key="chk_confirmar_limpeza")
+  
+  if st.button("🗑️ Deletar TODOS os Lançamentos do Sistema", type="primary", use_container_width=True):
+      if confirmar_limpeza:
+          st.session_state.vistorias = []
+          st.session_state.reconhecimento = []
+          
+          if os.path.exists(ARQUIVO_VISTORIAS):
+              os.remove(ARQUIVO_VISTORIAS)
+          if os.path.exists(ARQUIVO_RECONHECIMENTO):
+              os.remove(ARQUIVO_RECONHECIMENTO)
+              
+          st.success("🧹 Todos os lançamentos e dados foram apagados com sucesso!")
+          st.rerun()
+      else:
+          st.warning("⚠️ Para sua segurança, marque a caixa de confirmação acima antes de prosseguir com a exclusão total.")
 
 # ==================== ABA 8: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
@@ -678,7 +695,7 @@ with aba_foto:
                         if response.status_code == 200:
                             texto_resp = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                             if texto_resp.startswith("```json"): texto_resp = texto_resp[7:-3].strip()
-                            elif texto_resp.startswith("```"): texto_resp = texto_resp[3:-3].strip()
+                            elif texto_resp.startswith("```"): texto_resp = texto_res[3:-3].strip()
                             
                             lista_regs = json.loads(texto_resp)
                             df_lido = pd.DataFrame(lista_regs)

@@ -262,41 +262,48 @@ with aba_gerenciar:
     st.markdown("Aqui você pode alterar um dado incorreto (como um quarteirão inteiro ou agente) **em todos os registros de uma só vez**, ou gerenciar lançamentos individualmente.")
 
     if st.session_state.vistorias:
-        # ---- FERRAMENTA DE EDIÇÃO INTELIGENTE EM MASSA DENTRO DE FORMULÁRIO ----
-        with st.form("form_edicao_massa"):
-            st.markdown("### ⚡ Alteração Rápida em Massa (Modificar todos de uma vez)")
-            st.markdown("Use esta ferramenta para corrigir um erro comum de digitação (ex: trocar Quarteirão '03' por '01' em todos os registros instantaneamente).")
-            
-            col_m1, col_m2, col_m3 = st.columns(3)
-            with col_m1:
-                coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"], key="massa_coluna")
-            with col_m2:
-                valor_antigo = st.text_input("Valor antigo (o que está errado)", placeholder="Ex: 03", key="massa_val_antigo")
-            with col_m3:
-                valor_novo = st.text_input("Novo valor (o correto)", placeholder="Ex: 01", key="massa_val_novo")
-            
-            btn_aplicar_massa = st.form_submit_button("🚀 Aplicar Alteração em Massa", type="primary", use_container_width=True)
+        st.markdown("### ⚡ Alteração Rápida em Massa (Modificar todos de uma vez)")
+        st.markdown("Use esta ferramenta para corrigir um erro comum de digitação (ex: trocar Quarteirão '03' por '01' em todos os registros instantaneamente).")
+        
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        with col_m1:
+            coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"], key="massa_coluna")
+        with col_m2:
+            valor_antigo = st.text_input("Valor antigo (o que está errado)", placeholder="Ex: 03", key="massa_val_antigo")
+        with col_m3:
+            valor_novo = st.text_input("Novo valor (o correto)", placeholder="Ex: 01", key="massa_val_novo")
+        with col_m4:
+            st.markdown("<br>", unsafe_allow_html=True)
+            btn_aplicar_massa = st.button("🚀 Aplicar em Massa", type="primary", use_container_width=True, key="btn_massa_direto")
 
-            if btn_aplicar_massa:
-                if not valor_antigo:
-                    st.warning("⚠️ Informe o valor antigo que deseja substituir.")
-                else:
-                    alterados_v = 0
-                    for item in st.session_state.vistorias:
-                        if str(item.get(coluna_alvo, "")).strip() == str(valor_antigo).strip():
-                            item[coluna_alvo] = str(valor_novo).strip()
-                            alterados_v += 1
-                    
-                    alterados_r = 0
-                    if coluna_alvo in ["Quarteirao", "Data", "Semana"]:
-                        for item_r in st.session_state.reconhecimento:
-                            if str(item_r.get(coluna_alvo, "")).strip() == str(valor_antigo).strip():
-                                item_r[coluna_alvo] = str(valor_novo).strip()
-                                alterados_r += 1
+        if btn_aplicar_massa:
+            val_ant_limpo = str(valor_antigo).strip()
+            val_nov_limpo = str(valor_novo).strip()
 
+            if not val_ant_limpo:
+                st.warning("⚠️ Informe o valor antigo que deseja substituir.")
+            else:
+                alterados_v = 0
+                for item in st.session_state.vistorias:
+                    atual_str = str(item.get(coluna_alvo, "")).strip()
+                    if atual_str.lower() == val_ant_limpo.lower():
+                        item[coluna_alvo] = val_nov_limpo
+                        alterados_v += 1
+                
+                alterados_r = 0
+                if coluna_alvo in ["Quarteirao", "Data", "Semana"]:
+                    for item_r in st.session_state.reconhecimento:
+                        atual_str_r = str(item_r.get(coluna_alvo, "")).strip()
+                        if atual_str_r.lower() == val_ant_limpo.lower():
+                            item_r[coluna_alvo] = val_nov_limpo
+                            alterados_r += 1
+
+                if alterados_v > 0 or alterados_r > 0:
                     salvar_estado_local()
-                    st.success(f"✅ Sucesso! {alterados_v} vistorias e {alterados_r} reconhecimentos tiveram a coluna **{coluna_alvo}** alterada de **'{valor_antigo}'** para **'{valor_novo}'**.")
+                    st.success(f"✅ Sucesso! {alterados_v} vistorias e {alterados_r} reconhecimentos tiveram a coluna **{coluna_alvo}** alterada para **'{val_nov_limpo}'**.")
                     st.rerun()
+                else:
+                    st.warning(f"⚠️ Nenhum registro foi encontrado com o valor exato **'{val_ant_limpo}'** na coluna **{coluna_alvo}**. Verifique se digitou corretamente.")
 
         st.markdown("---")
         st.subheader("🔍 Gerenciamento Individual (Editar ou Excluir por Imóvel)")

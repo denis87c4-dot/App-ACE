@@ -56,6 +56,7 @@ def salvar_estado_local():
 (
     aba_cadastro,
     aba_busca,
+    aba_gerenciar,
     aba_fechadas,
     aba_semanal,
     aba_backup,
@@ -64,6 +65,7 @@ def salvar_estado_local():
 ) = st.tabs([
     "📝 Relatório Diário",
     "🔍 Busca Avançada",
+    "✏️ Gerenciar Lançamentos",
     "🚪 Imóveis Fechados & Recusas",
     "📈 Relatório Semanal",
     "💾 Central de Backup",
@@ -207,22 +209,142 @@ with aba_cadastro:
     m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
-# ==================== ABA 2: BUSCA AVANÇADA ====================
+# ==================== ABA 2: BUSCA AVANÇADA COM FILTROS PODEROSOS ====================
 with aba_busca:
-    st.subheader("🔍 Busca Avançada e Filtros Globais")
+    st.subheader("🔍 Busca Avançada e Filtros Poderosos")
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
-        termo = st.text_input("🔎 Buscar em todos os campos:", placeholder="Ex: 325, Rua da Palmeira...")
+
+        with st.expander("🎛️ Filtros Avançados", expanded=True):
+            fc1, fc2, fc3, fc4 = st.columns(4)
+            with fc1:
+                ciclos_disp = ["Todos"] + sorted(df_base["Ciclo"].unique().tolist()) if "Ciclo" in df_base.columns else ["Todos"]
+                filtro_ciclo = st.selectbox("Filtrar por Ciclo", ciclos_disp)
+            with fc2:
+                semanas_disp = ["Todas"] + sorted(df_base["Semana"].unique().tolist()) if "Semana" in df_base.columns else ["Todas"]
+                filtro_semana = st.selectbox("Filtrar por Semana", semanas_disp)
+            with fc3:
+                tipos_disp = ["Todos"] + sorted(df_base["Tipo Imovel"].unique().tolist()) if "Tipo Imovel" in df_base.columns else ["Todos"]
+                filtro_tipo = st.selectbox("Filtrar por Tipo de Imóvel", tipos_disp)
+            with fc4:
+                cond_disp = ["Todas"] + sorted(df_base["Vistoria"].unique().tolist()) if "Vistoria" in df_base.columns else ["Todas"]
+                filtro_cond = st.selectbox("Filtrar por Condição", cond_disp)
+
+        termo = st.text_input("🔎 Pesquisa rápida por termo (Rua, Número, Agente, etc.):", placeholder="Ex: 325, Rua da Palmeira, Denison...")
+
+        # Aplicando filtros
+        if filtro_ciclo != "Todos":
+            df_base = df_base[df_base["Ciclo"] == filtro_ciclo]
+        if filtro_semana != "Todas":
+            df_base = df_base[df_base["Semana"] == filtro_semana]
+        if filtro_tipo != "Todos":
+            df_base = df_base[df_base["Tipo Imovel"] == filtro_tipo]
+        if filtro_cond != "Todas":
+            df_base = df_base[df_base["Vistoria"] == filtro_cond]
+
         if termo:
             mask = df_base.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
             df_base = df_base[mask]
+
+        st.info(f"Exibindo **{len(df_base)}** registros correspondentes aos filtros.")
         st.dataframe(df_base, use_container_width=True)
+        
         csv_exp = df_base.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar CSV Filtrado", data=csv_exp, file_name="vistorias_filtradas.csv", mime="text/csv")
     else:
         st.info("Nenhum registro cadastrado.")
 
-# ==================== ABA 3: IMÓVEIS FECHADOS & RECUSAS ====================
+# ==================== ABA 3: GERENCIAR LANÇAMENTOS (EDITAR E DELETAR) ====================
+with aba_gerenciar:
+    st.subheader("✏️ Gerenciamento Individual de Lançamentos (Editar / Deletar)")
+    st.markdown("Selecione um lançamento abaixo para inspecionar os detalhes, alterá-lo ou excluí-lo individualmente.")
+
+    if st.session_state.vistorias:
+        # Cria uma lista de rótulos amigáveis para busca rápida e fácil
+        opcoes_lancamentos = []
+        for idx, item in enumerate(st.session_state.vistorias):
+            rotulo = f"[{idx}] Data: {item.get('Data')} | Quarteirão: {item.get('Quarteirao')} | Rua: {item.get('Rua')} | Nº: {item.get('Casa')} | Agente: {item.get('Agente')}"
+            opcoes_lancamentos.append((idx, rotulo))
+
+        # Selectbox com formatação amigável para evitar dificuldade na busca
+        lancamento_selecionado_label = st.selectbox(
+            "🔎 Escolha o lançamento pelo imóvel/endereço:",
+            options=[opt[1] for opt in opcoes_lancamentos],
+            key="select_gerenciar_lancamento"
+        )
+
+        # Descobre o índice real na lista
+        idx_selecionado = next(opt[0] for opt in opcoes_lancamentos if opt[1] == lancamento_selecionado_label)
+        registro_atual = st.session_state.vistorias[idx_selecionado]
+
+        st.markdown("---")
+        col_acoes1, col_acoes2 = st.columns(2)
+        with col_acoes1:
+            if st.button("🗑️ Deletar Este Lançamento Permanentemente", type="primary", use_container_width=True):
+                st.session_state.vistorias.pop(idx_selecionado)
+                salvar_estado_local()
+                st.success("✅ Registro excluído com sucesso!")
+                st.rerun()
+
+        st.markdown("### 📝 Editar Dados do Lançamento Selecionado")
+        with st.form("form_editar_lancamento"):
+            ec1, ec2, ec3 = st.columns(3)
+            with ec1:
+                nova_data = st.text_input("Data (DD/MM/YYYY)", value=str(registro_atual.get("Data", "")))
+                novo_ciclo = st.selectbox("Ciclo", ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"], index=["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"].index(registro_atual.get("Ciclo", "Ciclo 1")) if registro_atual.get("Ciclo") in ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"] else 0)
+                novo_quarteirao = st.text_input("Quarteirão", value=str(registro_atual.get("Quarteirao", "")))
+                novo_lado = st.number_input("Lado", min_value=1, value=int(registro_atual.get("Lado", 1)))
+            with ec2:
+                nova_rua = st.text_input("Rua", value=str(registro_atual.get("Rua", "")))
+                nova_casa = st.text_input("Número / Casa", value=str(registro_atual.get("Casa", "")))
+                tipos_possiveis = ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"]
+                tipo_atual = registro_atual.get("Tipo Imovel", "Residência (RES)")
+                idx_tipo = tipos_possiveis.index(tipo_atual) if tipo_atual in tipos_possiveis else 0
+                novo_tipo = st.selectbox("Tipo de Imóvel", tipos_possiveis, index=idx_tipo)
+                nova_hora = st.text_input("Hora (HH:MM)", value=str(registro_atual.get("Hora", "")))
+            with ec3:
+                cond_possiveis = ["Normal", "Recuperada", "Fechada / Recusa"]
+                cond_atual = registro_atual.get("Vistoria", "Normal")
+                idx_cond = cond_possiveis.index(cond_atual) if cond_atual in cond_possiveis else 0
+                nova_cond = st.selectbox("Condição da Vistoria", cond_possiveis, index=idx_cond)
+                novo_agente = st.text_input("Agente", value=str(registro_atual.get("Agente", "")))
+                novos_eliminados = st.number_input("Eliminados", min_value=0, value=int(registro_atual.get("Eliminados", 0)))
+                novos_tubitos = st.number_input("Tubitos", min_value=0, value=int(registro_atual.get("Tubitos", 0)))
+
+            ec4, ec5, ec6 = st.columns(3)
+            with ec4: novos_tratados = st.number_input("Tratados", min_value=0, value=int(registro_atual.get("Tratados", 0)))
+            with ec5: novas_gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=float(registro_atual.get("Gramas", 0.0)))
+            with ec6: novos_depositos = st.number_input("Depósitos", min_value=0, value=int(registro_atual.get("Depósitos", 0)))
+            novos_litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=float(registro_atual.get("Litros", 0.0)))
+
+            btn_salvar_edicao = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
+            if btn_salvar_edicao:
+                st.session_state.vistorias[idx_selecionado] = {
+                    "Data": nova_data,
+                    "Semana": registro_atual.get("Semana", 1),
+                    "Ciclo": novo_ciclo,
+                    "Quarteirao": str(novo_quarteirao).strip(),
+                    "Lado": int(novo_lado),
+                    "Rua": str(nova_rua).strip(),
+                    "Casa": str(nova_casa).strip(),
+                    "Tipo Imovel": novo_tipo,
+                    "Hora": nova_hora,
+                    "Vistoria": nova_cond,
+                    "Agente": str(novo_agente).strip(),
+                    "Eliminados": int(novos_eliminados),
+                    "Tubitos": int(novos_tubitos),
+                    "Tratados": int(novos_tratados),
+                    "Gramas": float(novas_gramas),
+                    "Depósitos": int(novos_depositos),
+                    "Litros": float(novos_litros),
+                }
+                salvar_estado_local()
+                st.success("✅ Lançamento atualizado com sucesso!")
+                st.rerun()
+    else:
+        st.info("Nenhum lançamento registrado para gerenciar.")
+
+# ==================== ABA 4: IMÓVEIS FECHADOS & RECUSAS ====================
 with aba_fechadas:
   st.subheader("🚪 Painel de Imóveis Fechados e Recusas")
   if st.session_state.vistorias:
@@ -233,7 +355,7 @@ with aba_fechadas:
   else:
     st.info("Sem dados cadastrados.")
 
-# ==================== ABA 4: RELATÓRIO SEMANAL ====================
+# ==================== ABA 5: RELATÓRIO SEMANAL ====================
 with aba_semanal:
   st.subheader("📈 Boletim Semanal Consolidado")
   if st.session_state.vistorias:
@@ -243,7 +365,7 @@ with aba_semanal:
   else:
     st.info("Sem dados cadastrados.")
 
-# ==================== ABA 5: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
+# ==================== ABA 6: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
 with aba_backup:
   st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
   st.markdown("Aqui você pode exportar sua base completa ou **enviar arquivos de boletim em qualquer formato** (`.csv`, `.txt`, etc.).")
@@ -259,13 +381,11 @@ with aba_backup:
 
   with col_b2:
     st.markdown("### 📥 Importação em Massa (Múltiplos Formatos)")
-    # Aceita explicitamente csv, txt e arquivos genéricos para nunca dar erro no celular/PC
     arquivo_upload = st.file_uploader("Enviar arquivo de boletim", type=["csv", "txt", "dat"], key="upload_flexivel")
 
     if arquivo_upload is not None:
       if st.button("🔄 Processar e Inserir na Base", type="primary", use_container_width=True):
         try:
-          # Tenta ler o arquivo independente de ser csv ou txt estruturado
           df_novo_csv = pd.read_csv(arquivo_upload)
           registros_novos = df_novo_csv.to_dict("records")
           
@@ -296,7 +416,7 @@ with aba_backup:
         except Exception as e:
           st.error(f"❌ Erro ao ler o arquivo: {e}. Verifique se o formato das colunas está correto.")
 
-# ==================== ABA 6: RECONHECIMENTO ====================
+# ==================== ABA 7: RECONHECIMENTO ====================
 with aba_reconhecimento:
   st.subheader("📊 Reconhecimento Geográfico")
   if st.session_state.reconhecimento:
@@ -305,7 +425,7 @@ with aba_reconhecimento:
   else:
     st.info("Sem dados de reconhecimento.")
 
-# ==================== ABA 7: LEITURA INTELIGENTE POR FOTO ====================
+# ==================== ABA 8: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
     st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
     st.markdown("Envie a foto do seu boletim. A IA extrairá os dados e gerará um botão para baixar o arquivo pronto para importação!")
@@ -353,7 +473,7 @@ with aba_foto:
                         Retorne APENAS o JSON puro sem markdown extra.
                         """
 
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key_input}"
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key_input}"
                         payload = {
                             "contents": [{"parts": [{"text": prompt_extracao}, {"inline_data": {"mime_type": mime_type, "data": image_base64}}]}]
                         }
@@ -370,7 +490,6 @@ with aba_foto:
                             st.success("✅ Leitura realizada com sucesso abaixo!")
                             st.dataframe(df_lido, use_container_width=True)
 
-                            # Gera dados em formato CSV para download limpo
                             csv_data = df_lido.to_csv(index=False).encode('utf-8')
                             st.download_button(
                                 label="📥 Baixar Arquivo do Boletim (Para Importar na Central de Backup)",

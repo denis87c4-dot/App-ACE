@@ -57,6 +57,7 @@ def salvar_estado_local():
     aba_cadastro,
     aba_busca,
     aba_gerenciar,
+    aba_tratamentos,
     aba_fechadas,
     aba_semanal,
     aba_backup,
@@ -66,6 +67,7 @@ def salvar_estado_local():
     "📝 Relatório Diário",
     "🔍 Busca Avançada",
     "✏️ Gerenciar Lançamentos",
+    "🧪 Análise de Tratamentos",
     "🚪 Imóveis Fechados & Recusas",
     "📈 Relatório Semanal",
     "💾 Central de Backup",
@@ -209,7 +211,7 @@ with aba_cadastro:
     m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
-# ==================== ABA 2: BUSCA AVANÇADA COM FILTROS PODEROSOS ====================
+# ==================== ABA 2: BUSCA AVANÇADA ====================
 with aba_busca:
     st.subheader("🔍 Busca Avançada e Filtros Poderosos")
     if st.session_state.vistorias:
@@ -219,20 +221,19 @@ with aba_busca:
             fc1, fc2, fc3, fc4 = st.columns(4)
             with fc1:
                 ciclos_disp = ["Todos"] + sorted(df_base["Ciclo"].unique().tolist()) if "Ciclo" in df_base.columns else ["Todos"]
-                filtro_ciclo = st.selectbox("Filtrar por Ciclo", ciclos_disp)
+                filtro_ciclo = st.selectbox("Filtrar por Ciclo", ciclos_disp, key="busca_ciclo")
             with fc2:
                 semanas_disp = ["Todas"] + sorted(df_base["Semana"].unique().tolist()) if "Semana" in df_base.columns else ["Todas"]
-                filtro_semana = st.selectbox("Filtrar por Semana", semanas_disp)
+                filtro_semana = st.selectbox("Filtrar por Semana", semanas_disp, key="busca_semana")
             with fc3:
                 tipos_disp = ["Todos"] + sorted(df_base["Tipo Imovel"].unique().tolist()) if "Tipo Imovel" in df_base.columns else ["Todos"]
-                filtro_tipo = st.selectbox("Filtrar por Tipo de Imóvel", tipos_disp)
+                filtro_tipo = st.selectbox("Filtrar por Tipo de Imóvel", tipos_disp, key="busca_tipo")
             with fc4:
                 cond_disp = ["Todas"] + sorted(df_base["Vistoria"].unique().tolist()) if "Vistoria" in df_base.columns else ["Todas"]
-                filtro_cond = st.selectbox("Filtrar por Condição", cond_disp)
+                filtro_cond = st.selectbox("Filtrar por Condição", cond_disp, key="busca_cond")
 
         termo = st.text_input("🔎 Pesquisa rápida por termo (Rua, Número, Agente, etc.):", placeholder="Ex: 325, Rua da Palmeira, Denison...")
 
-        # Aplicando filtros
         if filtro_ciclo != "Todos":
             df_base = df_base[df_base["Ciclo"] == filtro_ciclo]
         if filtro_semana != "Todas":
@@ -254,26 +255,23 @@ with aba_busca:
     else:
         st.info("Nenhum registro cadastrado.")
 
-# ==================== ABA 3: GERENCIAR LANÇAMENTOS (EDITAR E DELETAR) ====================
+# ==================== ABA 3: GERENCIAR LANÇAMENTOS ====================
 with aba_gerenciar:
     st.subheader("✏️ Gerenciamento Individual de Lançamentos (Editar / Deletar)")
     st.markdown("Selecione um lançamento abaixo para inspecionar os detalhes, alterá-lo ou excluí-lo individualmente.")
 
     if st.session_state.vistorias:
-        # Cria uma lista de rótulos amigáveis para busca rápida e fácil
         opcoes_lancamentos = []
         for idx, item in enumerate(st.session_state.vistorias):
             rotulo = f"[{idx}] Data: {item.get('Data')} | Quarteirão: {item.get('Quarteirao')} | Rua: {item.get('Rua')} | Nº: {item.get('Casa')} | Agente: {item.get('Agente')}"
             opcoes_lancamentos.append((idx, rotulo))
 
-        # Selectbox com formatação amigável para evitar dificuldade na busca
         lancamento_selecionado_label = st.selectbox(
             "🔎 Escolha o lançamento pelo imóvel/endereço:",
             options=[opt[1] for opt in opcoes_lancamentos],
             key="select_gerenciar_lancamento"
         )
 
-        # Descobre o índice real na lista
         idx_selecionado = next(opt[0] for opt in opcoes_lancamentos if opt[1] == lancamento_selecionado_label)
         registro_atual = st.session_state.vistorias[idx_selecionado]
 
@@ -344,7 +342,74 @@ with aba_gerenciar:
     else:
         st.info("Nenhum lançamento registrado para gerenciar.")
 
-# ==================== ABA 4: IMÓVEIS FECHADOS & RECUSAS ====================
+# ==================== ABA 4: ANÁLISE DE TRATAMENTOS E COMPARAÇÃO ENTRE QUARTEIRÕES ====================
+with aba_tratamentos:
+    st.subheader("🧪 Painel de Tratamentos e Comparativo entre Quarteirões")
+    st.markdown("Acompanhe o quantitativo de imóveis tratados, consumo de larvicidas e insumos aplicados, com filtros dedicados.")
+
+    if st.session_state.vistorias:
+        df_trat = pd.DataFrame(st.session_state.vistorias)
+
+        # Filtros específicos para tratamentos
+        with st.expander("🎛️ Filtros da Análise de Tratamento", expanded=True):
+            tc1, tc2 = st.columns(2)
+            with tc1:
+                ciclos_t = ["Todos"] + sorted(df_trat["Ciclo"].unique().tolist()) if "Ciclo" in df_trat.columns else ["Todos"]
+                filtro_ciclo_t = st.selectbox("Filtrar Ciclo", ciclos_t, key="trat_ciclo")
+            with tc2:
+                semanas_t = ["Todas"] + sorted(df_trat["Semana"].unique().tolist()) if "Semana" in df_trat.columns else ["Todas"]
+                filtro_semana_t = st.selectbox("Filtrar Semana", semanas_t, key="trat_semana")
+
+        if filtro_ciclo_t != "Todos":
+            df_trat = df_trat[df_trat["Ciclo"] == filtro_ciclo_t]
+        if filtro_semana_t != "Todas":
+            df_trat = df_trat[df_trat["Semana"] == filtro_semana_t]
+
+        # Métricas Globais Filtradas de Tratamento
+        tot_tratados = int(df_trat["Tratados"].sum()) if "Tratados" in df_trat.columns else 0
+        tot_gramas = float(df_trat["Gramas"].sum()) if "Gramas" in df_trat.columns else 0.0
+        tot_depositos = int(df_trat["Depósitos"].sum()) if "Depósitos" in df_trat.columns else 0
+        tot_litros = float(df_trat["Litros"].sum()) if "Litros" in df_trat.columns else 0.0
+
+        tm1, tm2, tm3, tm4 = st.columns(4)
+        tm1.metric("🏠 Imóveis Tratados", tot_tratados)
+        tm2.metric("⚖️ Larvicida Aplicado (g)", f"{tot_gramas:.1f}g")
+        tm3.metric("🛢️ Depósitos Tratados", tot_depositos)
+        tm4.metric("💧 Água Tratada (L)", f"{tot_litros:.1f}L")
+
+        st.markdown("---")
+        st.subheader("📊 Comparativo de Imóveis Tratados por Quarteirão")
+
+        if not df_trat.empty and "Quarteirao" in df_trat.columns:
+            # Agrupamento por quarteirão
+            df_agrupado_quart = df_trat.groupby("Quarteirao").agg(
+                Imóveis_Tratados=("Tratados", "sum"),
+                Total_Gramas=("Gramas", "sum"),
+                Total_Depósitos=("Depósitos", "sum"),
+                Total_Litros=("Litros", "sum"),
+                Visitas=("Casa", "count")
+            ).reset_index()
+
+            # Gráfico de barras comparativo via Altair
+            chart = alt.Chart(df_agrupado_quart).mark_bar(color="#1f77b4").encode(
+                x=alt.X("Quarteirao:N", title="Quarteirão", sort="-y"),
+                y=alt.Y("Imóveis_Tratados:Q", title="Quantidade de Imóveis Tratados"),
+                tooltip=["Quarteirao", "Imóveis_Tratados", "Total_Gramas", "Total_Depósitos", "Visitas"]
+            ).properties(height=400)
+
+            st.altair_chart(chart, use_container_width=True)
+
+            st.markdown("### 📋 Tabela Resumo Consolidada por Quarteirão")
+            st.dataframe(df_agrupado_quart, use_container_width=True)
+
+            csv_trat = df_agrupado_quart.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Baixar Relatório de Tratamento por Quarteirão", data=csv_trat, file_name="tratamentos_por_quarteirao.csv", mime="text/csv")
+        else:
+            st.info("Nenhum dado encontrado para os filtros selecionados.")
+    else:
+        st.info("Nenhum lançamento registrado no sistema.")
+
+# ==================== ABA 5: IMÓVEIS FECHADOS & RECUSAS ====================
 with aba_fechadas:
   st.subheader("🚪 Painel de Imóveis Fechados e Recusas")
   if st.session_state.vistorias:
@@ -355,7 +420,7 @@ with aba_fechadas:
   else:
     st.info("Sem dados cadastrados.")
 
-# ==================== ABA 5: RELATÓRIO SEMANAL ====================
+# ==================== ABA 6: RELATÓRIO SEMANAL ====================
 with aba_semanal:
   st.subheader("📈 Boletim Semanal Consolidado")
   if st.session_state.vistorias:
@@ -365,7 +430,7 @@ with aba_semanal:
   else:
     st.info("Sem dados cadastrados.")
 
-# ==================== ABA 6: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
+# ==================== ABA 7: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
 with aba_backup:
   st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
   st.markdown("Aqui você pode exportar sua base completa ou **enviar arquivos de boletim em qualquer formato** (`.csv`, `.txt`, etc.).")
@@ -416,7 +481,7 @@ with aba_backup:
         except Exception as e:
           st.error(f"❌ Erro ao ler o arquivo: {e}. Verifique se o formato das colunas está correto.")
 
-# ==================== ABA 7: RECONHECIMENTO ====================
+# ==================== ABA 8: RECONHECIMENTO ====================
 with aba_reconhecimento:
   st.subheader("📊 Reconhecimento Geográfico")
   if st.session_state.reconhecimento:
@@ -425,7 +490,7 @@ with aba_reconhecimento:
   else:
     st.info("Sem dados de reconhecimento.")
 
-# ==================== ABA 8: LEITURA INTELIGENTE POR FOTO ====================
+# ==================== ABA 9: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
     st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
     st.markdown("Envie a foto do seu boletim. A IA extrairá os dados e gerará um botão para baixar o arquivo pronto para importação!")

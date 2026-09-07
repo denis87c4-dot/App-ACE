@@ -192,7 +192,8 @@ with aba_cadastro:
             "TB": tb_val,
             "Comercio": com_val,
             "Total": 1,
-            "Data Registro": data_visita.strftime("%d/%m/%Y"),
+            "Data": data_visita.strftime("%d/%m/%Y"),
+            "Semana": int(num_semana),
             "Auditor": agente_resp if agente_resp else "Geral",
         }
         st.session_state.reconhecimento.append(registro_rec)
@@ -342,7 +343,7 @@ with aba_gerenciar:
     else:
         st.info("Nenhum lançamento registrado para gerenciar.")
 
-# ==================== ABA 4: ANÁLISE DE TRATAMENTOS E COMPARAÇÃO ENTRE QUARTEIRÕES ====================
+# ==================== ABA 4: ANÁLISE DE TRATAMENTOS ====================
 with aba_tratamentos:
     st.subheader("🧪 Painel de Tratamentos e Comparativo entre Quarteirões")
     st.markdown("Acompanhe o quantitativo de imóveis tratados, consumo de larvicidas e insumos aplicados, com filtros dedicados.")
@@ -350,7 +351,6 @@ with aba_tratamentos:
     if st.session_state.vistorias:
         df_trat = pd.DataFrame(st.session_state.vistorias)
 
-        # Filtros específicos para tratamentos
         with st.expander("🎛️ Filtros da Análise de Tratamento", expanded=True):
             tc1, tc2 = st.columns(2)
             with tc1:
@@ -365,7 +365,6 @@ with aba_tratamentos:
         if filtro_semana_t != "Todas":
             df_trat = df_trat[df_trat["Semana"] == filtro_semana_t]
 
-        # Métricas Globais Filtradas de Tratamento
         tot_tratados = int(df_trat["Tratados"].sum()) if "Tratados" in df_trat.columns else 0
         tot_gramas = float(df_trat["Gramas"].sum()) if "Gramas" in df_trat.columns else 0.0
         tot_depositos = int(df_trat["Depósitos"].sum()) if "Depósitos" in df_trat.columns else 0
@@ -381,7 +380,6 @@ with aba_tratamentos:
         st.subheader("📊 Comparativo de Imóveis Tratados por Quarteirão")
 
         if not df_trat.empty and "Quarteirao" in df_trat.columns:
-            # Agrupamento por quarteirão
             df_agrupado_quart = df_trat.groupby("Quarteirao").agg(
                 Imóveis_Tratados=("Tratados", "sum"),
                 Total_Gramas=("Gramas", "sum"),
@@ -390,7 +388,6 @@ with aba_tratamentos:
                 Visitas=("Casa", "count")
             ).reset_index()
 
-            # Gráfico de barras comparativo via Altair
             chart = alt.Chart(df_agrupado_quart).mark_bar(color="#1f77b4").encode(
                 x=alt.X("Quarteirao:N", title="Quarteirão", sort="-y"),
                 y=alt.Y("Imóveis_Tratados:Q", title="Quantidade de Imóveis Tratados"),
@@ -471,7 +468,8 @@ with aba_backup:
                 "TB": tb_val,
                 "Comercio": com_val,
                 "Total": 1,
-                "Data Registro": r["Data"],
+                "Data": r["Data"],
+                "Semana": int(r.get("Semana", 1)),
                 "Auditor": r.get("Agente", "Geral"),
             })
 
@@ -481,14 +479,72 @@ with aba_backup:
         except Exception as e:
           st.error(f"❌ Erro ao ler o arquivo: {e}. Verifique se o formato das colunas está correto.")
 
-# ==================== ABA 8: RECONHECIMENTO ====================
+# ==================== ABA 8: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
-  st.subheader("📊 Reconhecimento Geográfico")
-  if st.session_state.reconhecimento:
-    df_r = pd.DataFrame(st.session_state.reconhecimento)
-    st.dataframe(df_r.groupby("Quarteirao").sum(numeric_only=True).reset_index(), use_container_width=True)
-  else:
-    st.info("Sem dados de reconhecimento.")
+    st.subheader("📊 Reconhecimento Geográfico (Comparativo e Auditoria)")
+    st.markdown("Visualize o dimensionamento dos quarteirões com filtros avançados por **Data** e **Semana Epidemiológica** para comparações detalhadas.")
+
+    if st.session_state.reconhecimento:
+        df_rec = pd.DataFrame(st.session_state.reconhecimento)
+
+        # Garante colunas básicas caso venham vazias
+        for col in ["Quarteirao", "Residencias", "Outros", "TB", "Comercio", "Total", "Data", "Semana"]:
+            if col not in df_rec.columns:
+                if col in ["Residencias", "Outros", "TB", "Comercio", "Total", "Semana"]:
+                    df_rec[col] = 0
+                else:
+                    df_rec[col] = ""
+
+        with st.expander("🎛️ Filtros Poderosos de Comparação (Data e Semana)", expanded=True):
+            rc1, rc2, rc3 = st.columns(3)
+            with rc1:
+                datas_disp = ["Todas"] + sorted(df_rec["Data"].unique().tolist())
+                filtro_data_rec = st.selectbox("📅 Filtrar por Data Específica", datas_disp, key="rec_filtro_data")
+            with rc2:
+                semanas_disp = ["Todas"] + sorted(df_rec["Semana"].unique().tolist())
+                filtro_semana_rec = st.selectbox("📆 Filtrar por Semana Epidemiológica", semanas_disp, key="rec_filtro_semana")
+            with rc3:
+                quarts_disp = ["Todos"] + sorted(df_rec["Quarteirao"].unique().tolist())
+                filtro_quart_rec = st.selectbox("🏘️ Filtrar por Quarteirão", quarts_disp, key="rec_filtro_quart")
+
+        # Aplicando os filtros na base de reconhecimento
+        if filtro_data_rec != "Todas":
+            df_rec = df_rec[df_rec["Data"] == filtro_data_rec]
+        if filtro_semana_rec != "Todas":
+            df_rec = df_rec[df_rec["Semana"] == filtro_semana_rec]
+        if filtro_quart_rec != "Todos":
+            df_rec = df_rec[df_rec["Quarteirao"] == filtro_quart_rec]
+
+        if not df_rec.empty:
+            # Agrupando por quarteirão, data e semana para exibir exatamente o que foi solicitado
+            df_rec_agrupado = df_rec.groupby(["Quarteirao", "Data", "Semana"]).agg(
+                Residencias=("Residencias", "sum"),
+                Outros=("Outros", "sum"),
+                TB=("TB", "sum"),
+                Comercio=("Comercio", "sum"),
+                Total=("Total", "sum")
+            ).reset_index()
+
+            # Ordena por quarteirão
+            df_rec_agrupado = df_rec_agrupado.sort_values(by="Quarteirao")
+
+            # Exibição de Métricas Gerais do Recorte Filtrado
+            rm1, rm2, rm3, rm4, rm5 = st.columns(5)
+            rm1.metric("🏠 Total Residências", int(df_rec_agrupado["Residencias"].sum()))
+            rm2.metric("🏢 Total Comércios", int(df_rec_agrupado["Comercio"].sum()))
+            rm3.metric("🌾 Total TB", int(df_rec_agrupado["TB"].sum()))
+            rm4.metric("📦 Total Outros", int(df_rec_agrupado["Outros"].sum()))
+            rm5.metric("🎯 Total Geral Imóveis", int(df_rec_agrupado["Total"].sum()))
+
+            st.markdown("---")
+            st.dataframe(df_rec_agrupado, use_container_width=True)
+
+            csv_rec = df_rec_agrupado.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Baixar Relatório de Reconhecimento Geográfico", data=csv_rec, file_name="reconhecimento_geografico.csv", mime="text/csv")
+        else:
+            st.warning("⚠️ Nenhum registro encontrado para os filtros de data/semana selecionados.")
+    else:
+        st.info("Sem dados de reconhecimento geográfico cadastrados.")
 
 # ==================== ABA 9: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:

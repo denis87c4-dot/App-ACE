@@ -225,7 +225,7 @@ with aba_busca:
                 df_base[col] = df_base[col].astype(str)
 
         with st.expander("🎛️ Filtros Avançados", expanded=True):
-            fc1, fc2, fc3, fc4 = st.columns(4)
+            fc1, fc2, fc3, fc4, fc5 = st.columns(5)
             with fc1:
                 ciclos_disp = ["Todos"] + sorted(df_base["Ciclo"].unique().tolist()) if "Ciclo" in df_base.columns else ["Todos"]
                 filtro_ciclo = st.selectbox("Filtrar por Ciclo", ciclos_disp, key="busca_ciclo")
@@ -233,9 +233,12 @@ with aba_busca:
                 semanas_disp = ["Todas"] + sorted(df_base["Semana"].astype(str).unique().tolist()) if "Semana" in df_base.columns else ["Todas"]
                 filtro_semana = st.selectbox("Filtrar por Semana", semanas_disp, key="busca_semana")
             with fc3:
+                quarts_disp = ["Todos"] + sorted(df_base["Quarteirao"].unique().tolist()) if "Quarteirao" in df_base.columns else ["Todos"]
+                filtro_quarteirao = st.selectbox("Filtrar por Quarteirão", quarts_disp, key="busca_quarteirao")
+            with fc4:
                 tipos_disp = ["Todos"] + sorted(df_base["Tipo Imovel"].unique().tolist()) if "Tipo Imovel" in df_base.columns else ["Todos"]
                 filtro_tipo = st.selectbox("Filtrar por Tipo de Imóvel", tipos_disp, key="busca_tipo")
-            with fc4:
+            with fc5:
                 cond_disp = ["Todas"] + sorted(df_base["Vistoria"].unique().tolist()) if "Vistoria" in df_base.columns else ["Todas"]
                 filtro_cond = st.selectbox("Filtrar por Condição", cond_disp, key="busca_cond")
 
@@ -246,6 +249,8 @@ with aba_busca:
             df_filtrado = df_filtrado[df_filtrado["Ciclo"] == filtro_ciclo]
         if filtro_semana != "Todas":
             df_filtrado = df_filtrado[df_filtrado["Semana"].astype(str) == str(filtro_semana)]
+        if filtro_quarteirao != "Todos":
+            df_filtrado = df_filtrado[df_filtrado["Quarteirao"].astype(str) == str(filtro_quarteirao)]
         if filtro_tipo != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"] == filtro_tipo]
         if filtro_cond != "Todas":

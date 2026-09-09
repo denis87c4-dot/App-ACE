@@ -114,7 +114,7 @@ with aba_cadastro:
       opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
       sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
       if sel_q == "➕ Digitar novo quarteirão..." or not historico_quart:
-        num_quarteirao = st.text_input("Digite o Novo Quarteirão", placeholder="Ex: 325", key="input_novo_quarteirao")
+        num_quarteirao = st.text_input("Digite o Novo Quarteirão", placeholder="Ex: 56", key="input_novo_quarteirao")
       else:
         num_quarteirao = sel_q
 
@@ -123,10 +123,10 @@ with aba_cadastro:
       opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
       sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r, key="select_rua")
       if sel_r == "➕ Digitar nova rua..." or not historico_ruas:
-        nome_rua = st.text_input("Digite a Nova Rua", placeholder="Ex: Rua da Palmeira", key="input_nova_rua")
+        nome_rua = st.text_input("Digite a Nova Rua", placeholder="Ex: Rua Menino Jesus", key="input_nova_rua")
       else:
         nome_rua = sel_r
-      num_casa = st.text_input("Nº / Identificação do Imóvel", placeholder="Ex: 15F")
+      num_casa = st.text_input("Nº / Identificação do Imóvel", placeholder="Ex: 05")
 
     with col3:
       tipo_imovel = st.selectbox(
@@ -213,7 +213,7 @@ with aba_cadastro:
     m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
-# ==================== ABA 2: BUSCA AVANÇADA COM EDIÇÃO ESTILO EXCEL ====================
+# ==================== ABA 2: BUSCA AVANÇADA ====================
 with aba_busca:
     st.subheader("🔍 Busca Avançada e Edição Direta (Estilo Planilha)")
     st.markdown("Use os filtros para encontrar os lançamentos. **Clique na célula que deseja alterar, digite o novo valor e pressione Enter**. Depois, clique no botão salvar abaixo!")
@@ -243,7 +243,7 @@ with aba_busca:
                 cond_disp = ["Todas"] + sorted(df_base["Vistoria"].unique().tolist()) if "Vistoria" in df_base.columns else ["Todas"]
                 filtro_cond = st.selectbox("Filtrar por Condição", cond_disp, key="busca_cond")
 
-        termo = st.text_input("🔎 Pesquisa rápida por termo (Rua, Número, Agente, etc.):", placeholder="Ex: 325, Rua da Palmeira, Denison...")
+        termo = st.text_input("🔎 Pesquisa rápida por termo (Rua, Número, Agente, etc.):", placeholder="Ex: 56, Rua Menino Jesus, Denison...")
 
         df_filtrado = df_base.copy()
         if filtro_ciclo != "Todos":
@@ -299,7 +299,6 @@ with aba_gerenciar:
 
     if st.session_state.vistorias:
         st.markdown("### ⚡ Alteração Rápida em Massa (Modificar todos de uma vez)")
-        st.markdown("Use esta ferramenta para corrigir um erro comum de digitação (ex: trocar Quarteirão '03' por '01' em todos os registros instantaneamente).")
         
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
         with col_m1:
@@ -307,7 +306,7 @@ with aba_gerenciar:
         with col_m2:
             valor_antigo = st.text_input("Valor antigo (o que está errado)", placeholder="Ex: 03", key="massa_val_antigo")
         with col_m3:
-            valor_novo = st.text_input("Novo valor (o correto)", placeholder="Ex: 01", key="massa_val_novo")
+            valor_novo = st.text_input("Novo valor (o correto)", placeholder="Ex: 56", key="massa_val_novo")
         with col_m4:
             st.markdown("<br>", unsafe_allow_html=True)
             btn_aplicar_massa = st.button("🚀 Aplicar em Massa", type="primary", use_container_width=True, key="btn_massa_direto")
@@ -339,7 +338,7 @@ with aba_gerenciar:
                     st.success(f"✅ Sucesso! {alterados_v} vistorias e {alterados_r} reconhecimentos tiveram a coluna **{coluna_alvo}** alterada para **'{val_nov_limpo}'**.")
                     st.rerun()
                 else:
-                    st.warning(f"⚠️ Nenhum registro foi encontrado com o valor exato **'{val_ant_limpo}'** na coluna **{coluna_alvo}**. Verifique se digitou corretamente.")
+                    st.warning(f"⚠️ Nenhum registro foi encontrado com o valor exato **'{val_ant_limpo}'** na coluna **{coluna_alvo}**.")
 
         st.markdown("---")
         st.subheader("🔍 Gerenciamento Individual (Editar ou Excluir por Imóvel)")
@@ -429,8 +428,6 @@ with aba_gerenciar:
 # ==================== ABA 4: ANÁLISE DE TRATAMENTOS ====================
 with aba_tratamentos:
     st.subheader("🧪 Painel de Tratamentos e Comparativo entre Quarteirões")
-    st.markdown("Acompanhe o quantitativo de imóveis tratados, consumo de larvicidas e insumos aplicados, com filtros dedicados.")
-
     if st.session_state.vistorias:
         df_trat = pd.DataFrame(st.session_state.vistorias)
 
@@ -460,8 +457,6 @@ with aba_tratamentos:
         tm4.metric("💧 Água Tratada (L)", f"{tot_litros:.1f}L")
 
         st.markdown("---")
-        st.subheader("📊 Comparativo de Imóveis Tratados por Quarteirão")
-
         if not df_trat.empty and "Quarteirao" in df_trat.columns:
             df_agrupado_quart = df_trat.groupby("Quarteirao").agg(
                 Imóveis_Tratados=("Tratados", "sum"),
@@ -478,12 +473,7 @@ with aba_tratamentos:
             ).properties(height=400)
 
             st.altair_chart(chart, use_container_width=True)
-
-            st.markdown("### 📋 Tabela Resumo Consolidada por Quarteirão")
             st.dataframe(df_agrupado_quart, use_container_width=True)
-
-            csv_trat = df_agrupado_quart.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Baixar Relatório de Tratamento por Quarteirão", data=csv_trat, file_name="tratamentos_por_quarteirao.csv", mime="text/csv")
         else:
             st.info("Nenhum dado encontrado para os filtros selecionados.")
     else:
@@ -510,11 +500,9 @@ with aba_semanal:
   else:
     st.info("Sem dados cadastrados.")
 
-# ==================== ABA 7: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
+# ==================== ABA 7: CENTRAL DE SEGURANÇA ====================
 with aba_backup:
   st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
-  st.markdown("Aqui você pode exportar sua base completa, enviar arquivos de vários formatos (CSV, XLSX, XLS, PDF) ou limpar todos os dados do sistema.")
-
   col_b1, col_b2 = st.columns(2)
 
   with col_b1:
@@ -525,7 +513,7 @@ with aba_backup:
         st.download_button("📥 Baixar vistorias_diarias.csv", data=f, file_name="vistorias_diarias.csv", mime="text/csv", use_container_width=True)
 
   with col_b2:
-    st.markdown("### 📥 Importação em Massa (Múltiplos Formatos: CSV, XLSX, XLS, PDF)")
+    st.markdown("### 📥 Importação em Massa")
     arquivo_upload = st.file_uploader("Enviar arquivo de boletim", type=["csv", "txt", "dat", "xlsx", "xls", "pdf"], key="upload_flexivel_multiformat")
 
     if arquivo_upload is not None:
@@ -538,25 +526,18 @@ with aba_backup:
         elif extensao in ["xlsx", "xls"]:
             df_novo_importado = pd.read_excel(arquivo_upload)
         elif extensao == "pdf":
-            st.info("📄 PDF detectado. Tentando extrair tabelas ou texto estruturado...")
             with pdfplumber.open(arquivo_upload) as pdf:
-                texto_pdf = ""
                 tabelas_extraidas = []
                 for pagina in pdf.pages:
-                    texto_pdf += (pagina.extract_text() or "") + "\n"
                     t = pagina.extract_tables()
                     if t:
                         for tabela in t:
                             tabelas_extraidas.extend(tabela)
-                
                 if tabelas_extraidas and len(tabelas_extraidas) > 1:
                     df_novo_importado = pd.DataFrame(tabelas_extraidas[1:], columns=tabelas_extraidas[0])
-                else:
-                    st.warning("⚠️ O PDF não continha tabelas estruturadas legíveis diretamente. Linhas de texto extraídas:")
-                    st.text_area("Texto bruto do PDF", texto_pdf, height=150)
         
         if df_novo_importado is not None and not df_novo_importado.empty:
-            st.success("✅ Arquivo lido com sucesso! Veja uma prévia abaixo:")
+            st.success("✅ Arquivo lido com sucesso!")
             st.dataframe(df_novo_importado.head(5), use_container_width=True)
 
             if st.button("🔄 Confirmar e Inserir na Base do Sistema", type="primary", use_container_width=True):
@@ -604,64 +585,38 @@ with aba_backup:
                 })
 
               salvar_estado_local()
-              st.success(f"✅ {len(registros_novos)} registros importados e salvos com sucesso!")
+              st.success(f"✅ {len(registros_novos)} registros importados com sucesso!")
               st.rerun()
       except Exception as e:
-        st.error(f"❌ Erro ao processar o arquivo: {e}. Verifique se o formato e as colunas são compatíveis.")
+        st.error(f"❌ Erro ao processar o arquivo: {e}")
 
   st.markdown("---")
-  st.markdown("### ⚠️ Zona de Perigo / Limpeza Geral")
-  
-  confirmar_limpeza = st.checkbox("Confirmo que desejo apagar absolutamente todos os lançamentos e reconhecimentos geográficos salvos.", key="chk_confirmar_limpeza")
-  
+  confirmar_limpeza = st.checkbox("Confirmo que desejo apagar absolutamente todos os lançamentos.", key="chk_confirmar_limpeza")
   if st.button("🗑️ Deletar TODOS os Lançamentos do Sistema", type="primary", use_container_width=True):
       if confirmar_limpeza:
           st.session_state.vistorias = []
           st.session_state.reconhecimento = []
-          
-          if os.path.exists(ARQUIVO_VISTORIAS):
-              os.remove(ARQUIVO_VISTORIAS)
-          if os.path.exists(ARQUIVO_RECONHECIMENTO):
-              os.remove(ARQUIVO_RECONHECIMENTO)
-              
-          st.success("🧹 Todos os lançamentos e dados foram apagados com sucesso!")
+          if os.path.exists(ARQUIVO_VISTORIAS): os.remove(ARQUIVO_VISTORIAS)
+          if os.path.exists(ARQUIVO_RECONHECIMENTO): os.remove(ARQUIVO_RECONHECIMENTO)
+          st.success("🧹 Dados apagados!")
           st.rerun()
       else:
-          st.warning("⚠️ Para sua segurança, marque a caixa de confirmação acima antes de prosseguir com a exclusão total.")
+          st.warning("⚠️ Marque a caixa de confirmação acima.")
 
 # ==================== ABA 8: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
     st.subheader("📊 Reconhecimento Geográfico (Comparativo e Auditoria)")
-    st.markdown("Visualize o dimensionamento dos quarteirões com filtros avançados por **Data** e **Semana Epidemiológica** para comparações detalhadas.")
-
     if st.session_state.reconhecimento:
         df_rec = pd.DataFrame(st.session_state.reconhecimento)
-
-        for col in ["Quarteirao", "Residencias", "Outros", "TB", "Comercio", "Total", "Data", "Semana"]:
-            if col not in df_rec.columns:
-                if col in ["Residencias", "Outros", "TB", "Comercio", "Total", "Semana"]:
-                    df_rec[col] = 0
-                else:
-                    df_rec[col] = ""
-
-        with st.expander("🎛️ Filtros Poderosos de Comparação (Data e Semana)", expanded=True):
+        with st.expander("🎛️ Filtros", expanded=True):
             rc1, rc2, rc3 = st.columns(3)
-            with rc1:
-                datas_disp = ["Todas"] + sorted(df_rec["Data"].unique().tolist())
-                filtro_data_rec = st.selectbox("📅 Filtrar por Data Específica", datas_disp, key="rec_filtro_data")
-            with rc2:
-                semanas_disp = ["Todas"] + sorted(df_rec["Semana"].unique().tolist())
-                filtro_semana_rec = st.selectbox("📆 Filtrar por Semana Epidemiológica", semanas_disp, key="rec_filtro_semana")
-            with rc3:
-                quarts_disp = ["Todos"] + sorted(df_rec["Quarteirao"].unique().tolist())
-                filtro_quart_rec = st.selectbox("🏘️ Filtrar por Quarteirão", quarts_disp, key="rec_filtro_quart")
+            with rc1: filtro_data_rec = st.selectbox("📅 Data", ["Todas"] + sorted(df_rec["Data"].unique().tolist()), key="rec_filtro_data")
+            with rc2: filtro_semana_rec = st.selectbox("📆 Semana", ["Todas"] + sorted(df_rec["Semana"].unique().tolist()), key="rec_filtro_semana")
+            with rc3: filtro_quart_rec = st.selectbox("🏘️ Quarteirão", ["Todos"] + sorted(df_rec["Quarteirao"].unique().tolist()), key="rec_filtro_quart")
 
-        if filtro_data_rec != "Todas":
-            df_rec = df_rec[df_rec["Data"] == filtro_data_rec]
-        if filtro_semana_rec != "Todas":
-            df_rec = df_rec[df_rec["Semana"] == filtro_semana_rec]
-        if filtro_quart_rec != "Todos":
-            df_rec = df_rec[df_rec["Quarteirao"] == filtro_quart_rec]
+        if filtro_data_rec != "Todas": df_rec = df_rec[df_rec["Data"] == filtro_data_rec]
+        if filtro_semana_rec != "Todas": df_rec = df_rec[df_rec["Semana"] == filtro_semana_rec]
+        if filtro_quart_rec != "Todos": df_rec = df_rec[df_rec["Quarteirao"] == filtro_quart_rec]
 
         if not df_rec.empty:
             df_rec_agrupado = df_rec.groupby(["Quarteirao", "Data", "Semana"]).agg(
@@ -670,38 +625,22 @@ with aba_reconhecimento:
                 TB=("TB", "sum"),
                 Comercio=("Comercio", "sum"),
                 Total=("Total", "sum")
-            ).reset_index()
+            ).reset_index().sort_values(by="Quarteirao")
 
-            df_rec_agrupado = df_rec_agrupado.sort_values(by="Quarteirao")
-
-            rm1, rm2, rm3, rm4, rm5 = st.columns(5)
-            rm1.metric("🏠 Total Residências", int(df_rec_agrupado["Residencias"].sum()))
-            rm2.metric("🏢 Total Comércios", int(df_rec_agrupado["Comercio"].sum()))
-            rm3.metric("🌾 Total TB", int(df_rec_agrupado["TB"].sum()))
-            rm4.metric("📦 Total Outros", int(df_rec_agrupado["Outros"].sum()))
-            rm5.metric("🎯 Total Geral Imóveis", int(df_rec_agrupado["Total"].sum()))
-
-            st.markdown("---")
             st.dataframe(df_rec_agrupado, use_container_width=True)
-
-            csv_rec = df_rec_agrupado.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Baixar Relatório de Reconhecimento Geográfico", data=csv_rec, file_name="reconhecimento_geografico.csv", mime="text/csv")
         else:
-            st.warning("⚠️ Nenhum registro encontrado para os filtros de data/semana selecionados.")
+            st.warning("⚠️ Nenhum registro encontrado.")
     else:
-        st.info("Sem dados de reconhecimento geográfico cadastrados.")
+        st.info("Sem dados de reconhecimento geográfico.")
 
 # ==================== ABA 9: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
     st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
-    st.markdown("Envie a foto do seu boletim. A IA extrairá os dados e gerará um botão para baixar o arquivo pronto para importação!")
-
     api_key_input = st.text_input("🔑 Chave de API do Gemini", type="password", key="input_gemini_key_foto")
     foto_boletim = st.file_uploader("Foto do boletim", type=["png", "jpg", "jpeg"], key="upload_foto_boletim_ia")
 
     if foto_boletim is not None:
         st.image(foto_boletim, caption="Boletim enviado", use_container_width=True)
-
         if st.button("🚀 Processar Foto e Gerar Arquivo", type="primary", use_container_width=True):
             if not api_key_input:
                 st.error("Insira sua chave de API do Gemini.")

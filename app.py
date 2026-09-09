@@ -254,7 +254,7 @@ with aba_cadastro:
 # ==================== ABA 2: BUSCA AVANÇADA ====================
 with aba_busca:
     st.subheader("🔍 Busca Avançada e Edição Direta")
-    st.markdown("Use os filtros para encontrar os lançamentos. **As colunas da tabela abaixo possuem menus de seleção (dropdowns) integrados, permitindo também inserir novos valores livremente.**")
+    st.markdown("Use os filtros para encontrar os lançamentos. **As linhas coloridas indicam a situação da vistoria**.")
 
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
@@ -292,7 +292,7 @@ with aba_busca:
             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].astype(str) == str(filtro_quarteirao)]
         if filtro_tipo != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"] == filtro_tipo]
-        if filtro_cond != "Todos":
+        if filtro_cond != "Todas":
             df_filtrado = df_filtrado[df_filtrado["Vistoria"] == filtro_cond]
 
         if termo:
@@ -312,53 +312,14 @@ with aba_busca:
         # Visualização Colorida
         st.dataframe(estilar_tabela(df_filtrado), use_container_width=True)
 
-        st.markdown("### ✏️ Editor Estilo Planilha com Dropdowns")
-        st.caption("As colunas abaixo possuem seleção suspensa (dropdown). Caso precise de um nome novo que não esteja na lista, você pode digitá-lo livremente.")
-
-        # Coletando opções dinâmicas globais já cadastradas para alimentar os dropdowns
-        lista_ciclos_opcoes = sorted(list(set(df_base["Ciclo"].dropna().astype(str).tolist() + ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"])))
-        lista_tipos_opcoes = sorted(list(set(df_base["Tipo Imovel"].dropna().astype(str).tolist() + ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"])))
-        lista_vistorias_opcoes = sorted(list(set(df_base["Vistoria"].dropna().astype(str).tolist() + ["Normal", "Recuperada", "Fechada / Recusa"])))
-        lista_quarteiroes_opcoes = sorted(list(set(df_base["Quarteirao"].dropna().astype(str).tolist())))
-        lista_agentes_opcoes = sorted(list(set(df_base["Agente"].dropna().astype(str).tolist())))
+        st.markdown("### ✏️ Editor de Dados (Estilo Planilha)")
+        st.caption("Clique em qualquer célula abaixo para alterar, digite o novo valor e aperte Enter. Em seguida, clique em **Salvar Alterações**.")
 
         df_editado = st.data_editor(
             df_filtrado,
             use_container_width=True,
             num_rows="dynamic",
-            key="editor_busca_excel",
-            column_config={
-                "Ciclo": st.column_config.SelectboxColumn(
-                    "Ciclo",
-                    help="Selecione o ciclo ou digite um novo",
-                    options=lista_ciclos_opcoes,
-                    required=True
-                ),
-                "Tipo Imovel": st.column_config.SelectboxColumn(
-                    "Tipo Imovel",
-                    help="Selecione o tipo de imóvel",
-                    options=lista_tipos_opcoes,
-                    required=True
-                ),
-                "Vistoria": st.column_config.SelectboxColumn(
-                    "Vistoria",
-                    help="Condição da vistoria",
-                    options=lista_vistorias_opcoes,
-                    required=True
-                ),
-                "Quarteirao": st.column_config.SelectboxColumn(
-                    "Quarteirao",
-                    help="Quarteirão",
-                    options=lista_quarteiroes_opcoes,
-                    required=True
-                ),
-                "Agente": st.column_config.SelectboxColumn(
-                    "Agente",
-                    help="Agente responsável",
-                    options=lista_agentes_opcoes,
-                    required=True
-                )
-            }
+            key="editor_busca_excel"
         )
 
         col_b_salvar, col_b_down = st.columns(2)

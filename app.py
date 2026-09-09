@@ -5,6 +5,7 @@ import zipfile
 import altair as alt
 import pandas as pd
 import streamlit as st
+import pdfplumber
 
 # ==================== CONFIGURAÇÃO DA PÁGINA ====================
 st.set_page_config(
@@ -512,7 +513,7 @@ with aba_semanal:
 # ==================== ABA 7: CENTRAL DE SEGURANÇA E RESTAURAÇÃO ====================
 with aba_backup:
   st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
-  st.markdown("Aqui você pode exportar sua base completa, enviar arquivos ou limpar todos os dados do sistema.")
+  st.markdown("Aqui você pode exportar sua base completa, enviar arquivos de vários formatos (CSV, XLSX, XLS, PDF) ou limpar todos os dados do sistema.")
 
   col_b1, col_b2 = st.columns(2)
 
@@ -524,42 +525,90 @@ with aba_backup:
         st.download_button("📥 Baixar vistorias_diarias.csv", data=f, file_name="vistorias_diarias.csv", mime="text/csv", use_container_width=True)
 
   with col_b2:
-    st.markdown("### 📥 Importação em Massa (Múltiplos Formatos)")
-    arquivo_upload = st.file_uploader("Enviar arquivo de boletim", type=["csv", "txt", "dat"], key="upload_flexivel")
+    st.markdown("### 📥 Importação em Massa (Múltiplos Formatos: CSV, XLSX, XLS, PDF)")
+    arquivo_upload = st.file_uploader("Enviar arquivo de boletim", type=["csv", "txt", "dat", "xlsx", "xls", "pdf"], key="upload_flexivel_multiformat")
 
     if arquivo_upload is not None:
-      if st.button("🔄 Processar e Inserir na Base", type="primary", use_container_width=True):
-        try:
-          df_novo_csv = pd.read_csv(arquivo_upload)
-          registros_novos = df_novo_csv.to_dict("records")
-          
-          for r in registros_novos:
-            st.session_state.vistorias.append(r)
-            tipo_imovel = r.get("Tipo Imovel", "Residência (RES)")
-            res_val, com_val, tb_val, out_val = 0, 0, 0, 0
-            if "Residência" in tipo_imovel: res_val = 1
-            elif "Comércio" in tipo_imovel: com_val = 1
-            elif "Terreno" in tipo_imovel: tb_val = 1
-            else: out_val = 1
+      extensao = arquivo_upload.name.split(".")[-1].lower()
+      df_novo_importado = None
 
-            st.session_state.reconhecimento.append({
-                "Quarteirao": str(r["Quarteirao"]).strip(),
-                "Lado": int(r.get("Lado", 1)),
-                "Residencias": res_val,
-                "Outros": out_val,
-                "TB": tb_val,
-                "Comercio": com_val,
-                "Total": 1,
-                "Data": r["Data"],
-                "Semana": int(r.get("Semana", 1)),
-                "Auditor": r.get("Agente", "Geral"),
-            })
+      try:
+        if extensao in ["csv", "txt", "dat"]:
+            df_novo_importado = pd.read_csv(arquivo_upload)
+        elif extensao in ["xlsx", "xls"]:
+            df_novo_importado = pd.read_excel(arquivo_upload)
+        elif extensao == "pdf":
+            st.info("📄 PDF detectado. Tentando extrair tabelas ou texto estruturado...")
+            with pdfplumber.open(arquivo_upload) as pdf:
+                texto_pdf = ""
+                tabelas_extraidas = []
+                for pagina in pdf.pages:
+                    texto_pdf += (pagina.extract_text() or "") + "\n"
+                    t = pagina.extract_tables()
+                    if t:
+                        for tabela in t:
+                            tabelas_extraidas.extend(tabela)
+                
+                if tabelas_extraidas and len(tabelas_extraidas) > 1:
+                    df_novo_importado = pd.DataFrame(tabelas_extraidas[1:], columns=tabelas_extraidas[0])
+                else:
+                    st.warning("⚠️ O PDF não continha tabelas estruturadas legíveis diretamente. Linhas de texto extraídas:")
+                    st.text_area("Texto bruto do PDF", texto_pdf, height=150)
+        
+        if df_novo_importado is not None and not df_novo_importado.empty:
+            st.success("✅ Arquivo lido com sucesso! Veja uma prévia abaixo:")
+            st.dataframe(df_novo_importado.head(5), use_container_width=True)
 
-          salvar_estado_local()
-          st.success(f"✅ {len(registros_novos)} registros importados com sucesso! Atualizando...")
-          st.rerun()
-        except Exception as e:
-          st.error(f"❌ Erro ao ler o arquivo: {e}. Verifique se o formato das colunas está correto.")
+            if st.button("🔄 Confirmar e Inserir na Base do Sistema", type="primary", use_container_width=True):
+              registros_novos = df_novo_importado.to_dict("records")
+              for r in registros_novos:
+                # Normaliza chaves comuns para evitar erros se vierem com nomes diferentes
+                reg_formatado = {
+                    "Data": str(r.get("Data", datetime.today().strftime("%d/%m/%Y"))),
+                    "Semana": int(r.get("Semana", 1)),
+                    "Ciclo": str(r.get("Ciclo", "Ciclo 1")),
+                    "Quarteirao": str(r.get("Quarteirao", r.get("Quarteirão", "0"))).strip(),
+                    "Lado": int(r.get("Lado", 1)),
+                    "Rua": str(r.get("Rua", r.get("Logradouro", "Rua Principal"))).strip(),
+                    "Casa": str(r.get("Casa", r.get("Nº Imóvel", r.get("Nº", "0")))).strip(),
+                    "Tipo Imovel": str(r.get("Tipo Imovel", "Residência (RES)")),
+                    "Hora": str(r.get("Hora", "08:00")),
+                    "Vistoria": str(r.get("Vistoria", "Normal")),
+                    "Agente": str(r.get("Agente", "Desconhecido")).strip(),
+                    "Eliminados": int(r.get("Eliminados", 0) if pd.notna(r.get("Eliminados", 0)) else 0),
+                    "Tubitos": int(r.get("Tubitos", 0) if pd.notna(r.get("Tubitos", 0)) else 0),
+                    "Tratados": int(r.get("Tratados", 0) if pd.notna(r.get("Tratados", 0)) else 0),
+                    "Gramas": float(r.get("Gramas", 0.0) if pd.notna(r.get("Gramas", 0.0)) else 0.0),
+                    "Depósitos": int(r.get("Depósitos", 0) if pd.notna(r.get("Depósitos", 0)) else 0),
+                    "Litros": float(r.get("Litros", 0.0) if pd.notna(r.get("Litros", 0.0)) else 0.0),
+                }
+                st.session_state.vistorias.append(reg_formatado)
+                
+                tipo_imovel = reg_formatado["Tipo Imovel"]
+                res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                if "Residência" in tipo_imovel: res_val = 1
+                elif "Comércio" in tipo_imovel: com_val = 1
+                elif "Terreno" in tipo_imovel: tb_val = 1
+                else: out_val = 1
+
+                st.session_state.reconhecimento.append({
+                    "Quarteirao": reg_formatado["Quarteirao"],
+                    "Lado": reg_formatado["Lado"],
+                    "Residencias": res_val,
+                    "Outros": out_val,
+                    "TB": tb_val,
+                    "Comercio": com_val,
+                    "Total": 1,
+                    "Data": reg_formatado["Data"],
+                    "Semana": reg_formatado["Semana"],
+                    "Auditor": reg_formatado["Agente"],
+                })
+
+              salvar_estado_local()
+              st.success(f"✅ {len(registros_novos)} registros importados e salvos com sucesso!")
+              st.rerun()
+      except Exception as e:
+        st.error(f"❌ Erro ao processar o arquivo: {e}. Verifique se o formato e as colunas são compatíveis.")
 
   st.markdown("---")
   st.markdown("### ⚠️ Zona de Perigo / Limpeza Geral")
@@ -700,7 +749,7 @@ with aba_foto:
                         if response.status_code == 200:
                             texto_resp = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                             if texto_resp.startswith("```json"): texto_resp = texto_resp[7:-3].strip()
-                            elif texto_resp.startswith("```"): texto_resp = texto_res[3:-3].strip()
+                            elif texto_resp.startswith("```"): texto_resp = texto_resp[3:-3].strip()
                             
                             lista_regs = json.loads(texto_resp)
                             df_lido = pd.DataFrame(lista_regs)

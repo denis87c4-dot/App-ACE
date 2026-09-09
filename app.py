@@ -562,7 +562,6 @@ with aba_backup:
             if st.button("🔄 Confirmar e Inserir na Base do Sistema", type="primary", use_container_width=True):
               registros_novos = df_novo_importado.to_dict("records")
               for r in registros_novos:
-                # Normaliza chaves comuns para evitar erros se vierem com nomes diferentes
                 reg_formatado = {
                     "Data": str(r.get("Data", datetime.today().strftime("%d/%m/%Y"))),
                     "Semana": int(r.get("Semana", 1)),

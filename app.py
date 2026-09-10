@@ -53,9 +53,41 @@ def salvar_estado_local():
     elif os.path.exists(ARQUIVO_RECONHECIMENTO):
         os.remove(ARQUIVO_RECONHECIMENTO)
 
+def expandir_sequencia_casas(texto_casas):
+    """
+    Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas ['10', '12', '15', '16', '17', '18', '19', '20', '22']
+    """
+    if not texto_casas:
+        return []
+    
+    casas_finais = []
+    partes = str(texto_casas).split(",")
+    for parte in partes:
+        parte = parte.strip()
+        if not parte:
+            continue
+        if " a " in parte.lower() or "-" in parte:
+            separador = " a " if " a " in parte.lower() else "-"
+            sub = parte.lower().split(separador)
+            if len(sub) == 2:
+                try:
+                    inicio = int(''.join(filter(str.isdigit, sub[0])))
+                    fim = int(''.join(filter(str.isdigit, sub[1])))
+                    prefixo = ''.join(filter(str.isalpha, sub[0]))
+                    for n in range(min(inicio, fim), max(inicio, fim) + 1):
+                        casas_finais.append(f"{prefixo}{n}" if prefixo else str(n))
+                except:
+                    casas_finais.append(parte)
+            else:
+                casas_finais.append(parte)
+        else:
+            casas_finais.append(parte)
+    return casas_finais
+
 # ==================== ABAS PRINCIPAIS ====================
 (
     aba_cadastro,
+    aba_lote,
     aba_busca,
     aba_gerenciar,
     aba_tratamentos,
@@ -66,6 +98,7 @@ def salvar_estado_local():
     aba_foto,
 ) = st.tabs([
     "📝 Relatório Diário",
+    "⚡ Lote Rápido por Lado",
     "🔍 Busca Avançada & Edição",
     "✏️ Gerenciar Lançamentos",
     "🧪 Análise de Tratamentos",
@@ -79,7 +112,7 @@ def salvar_estado_local():
 
 # ==================== ABA 1: RELATÓRIO DIÁRIO ====================
 with aba_cadastro:
-  st.subheader("📋 Relatório Diário de Campo (Modo Rápido)")
+  st.subheader("📋 Relatório Diário de Campo (Modo Rápido Individual)")
   st.markdown(
       "⚡ **Modo de Campo Agilizado:** O sistema memoriza seus últimos dados"
       " preenchidos. Ao salvar, apenas o número da casa é limpo para a próxima"
@@ -213,7 +246,160 @@ with aba_cadastro:
     m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
     m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
-# ==================== ABA 2: BUSCA AVANÇADA ====================
+
+# ==================== ABA 2: LOTE RÁPIDO POR LADO ====================
+with aba_lote:
+    st.subheader("⚡ Cadastro em Lote Rápido por Lado de Quarteirão")
+    st.markdown("🚀 **Perfeito para ganho de tempo:** Defina o quarteirão, a rua e o lado uma única vez. Depois, digite todas as casas abertas de uma só vez (ex: `10 a 50`), e informe quais estavam fechadas ou precisaram de tratamento!")
+
+    with st.form("form_lote_lado"):
+        lc1, lc2, lc3 = st.columns(3)
+        with lc1:
+            lote_data = st.date_input("Data do Lote", value=datetime.today(), key="lote_data")
+            lote_semana = st.number_input("Semana Epidemiológica", min_value=1, max_value=53, value=int(lote_data.strftime("%V")), key="lote_semana")
+            lote_ciclo = st.selectbox("Ciclo", ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"], key="lote_ciclo")
+        with lc2:
+            lote_quarteirao = st.text_input("Nº do Quarteirão", placeholder="Ex: 56", key="lote_quart")
+            lote_lado = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1, key="lote_lado")
+            lote_rua = st.text_input("Nome da Rua / Logradouro", placeholder="Ex: Rua São Benedito", key="lote_rua")
+        with lc3:
+            lote_agente = st.text_input("Agente Responsável", placeholder="Ex: Denison Oliveira", key="lote_agente")
+            lote_tipo_padrao = st.selectbox("Tipo Padrão dos Imóveis", ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"], key="lote_tipo")
+
+        st.markdown("---")
+        st.markdown("### 🏠 Sequência de Casas do Lado")
+        
+        casas_abertas_input = st.text_area(
+            "1️⃣ Casas Abertas / Vistorias Normais (Separe por vírgula ou intervalo):",
+            placeholder="Ex: 02, 04, 06 a 38, 42",
+            key="lote_abertas"
+        )
+        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            casas_fechadas_input = st.text_area(
+                "2️⃣ Casas Fechadas / Recusas neste mesmo lado:",
+                placeholder="Ex: 12, 28",
+                key="lote_fechadas"
+            )
+        with col_f2:
+            casas_tratadas_input = st.text_area(
+                "3️⃣ Casas que receberam Tratamento (Larvicida):",
+                placeholder="Ex: 08, 14",
+                key="lote_tratadas"
+            )
+
+        st.markdown("---")
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            gramas_padrao = st.number_input("Média de Gramas (g) por imóvel tratado", min_value=0.0, format="%.1f", value=0.0, key="lote_gramas")
+        with col_t2:
+            depositos_padrao = st.number_input("Média de Depósitos por imóvel tratado", min_value=0, value=0, key="lote_deps")
+
+        btn_salvar_lote = st.form_submit_button("🚀 Salvar Lote Completo de Imóveis", use_container_width=True)
+
+        if btn_salvar_lote:
+            if not lote_quarteirao or not lote_rua or not lote_agente:
+                st.error("⚠️ Preencha o Quarteirão, a Rua e o Agente Responsável.")
+            else:
+                lista_abertas = expandir_sequencia_casas(casas_abertas_input)
+                lista_fechadas = expandir_sequencia_casas(casas_fechadas_input)
+                lista_tratadas_ids = expandir_sequencia_casas(casas_tratadas_input)
+
+                total_gerado = 0
+                data_str = lote_data.strftime("%d/%m/%Y")
+
+                for casa in lista_abertas:
+                    foi_tratada = casa in lista_tratadas_ids
+                    novo_reg = {
+                        "Data": data_str,
+                        "Semana": int(lote_semana),
+                        "Ciclo": lote_ciclo,
+                        "Quarteirao": str(lote_quarteirao).strip(),
+                        "Lado": int(lote_lado),
+                        "Rua": str(lote_rua).strip(),
+                        "Casa": str(casa).strip(),
+                        "Tipo Imovel": lote_tipo_padrao,
+                        "Hora": "08:00",
+                        "Vistoria": "Normal",
+                        "Agente": str(lote_agente).strip(),
+                        "Eliminados": 1 if foi_tratada else 0,
+                        "Tubitos": 0,
+                        "Tratados": 1 if foi_tratada else 0,
+                        "Gramas": float(gramas_padrao) if foi_tratada else 0.0,
+                        "Depósitos": int(depositos_padrao) if foi_tratada else 0,
+                        "Litros": 0.0,
+                    }
+                    st.session_state.vistorias.append(novo_reg)
+                    total_gerado += 1
+
+                    res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                    if "Residência" in lote_tipo_padrao: res_val = 1
+                    elif "Comércio" in lote_tipo_padrao: com_val = 1
+                    elif "Terreno" in lote_tipo_padrao: tb_val = 1
+                    else: out_val = 1
+
+                    st.session_state.reconhecimento.append({
+                        "Quarteirao": str(lote_quarteirao).strip(),
+                        "Lado": int(lote_lado),
+                        "Residencias": res_val,
+                        "Outros": out_val,
+                        "TB": tb_val,
+                        "Comercio": com_val,
+                        "Total": 1,
+                        "Data": data_str,
+                        "Semana": int(lote_semana),
+                        "Auditor": lote_agente,
+                    })
+
+                for casa in lista_fechadas:
+                    novo_reg = {
+                        "Data": data_str,
+                        "Semana": int(lote_semana),
+                        "Ciclo": lote_ciclo,
+                        "Quarteirao": str(lote_quarteirao).strip(),
+                        "Lado": int(lote_lado),
+                        "Rua": str(lote_rua).strip(),
+                        "Casa": str(casa).strip(),
+                        "Tipo Imovel": lote_tipo_padrao,
+                        "Hora": "08:00",
+                        "Vistoria": "Fechada / Recusa",
+                        "Agente": str(lote_agente).strip(),
+                        "Eliminados": 0,
+                        "Tubitos": 0,
+                        "Tratados": 0,
+                        "Gramas": 0.0,
+                        "Depósitos": 0,
+                        "Litros": 0.0,
+                    }
+                    st.session_state.vistorias.append(novo_reg)
+                    total_gerado += 1
+
+                    res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                    if "Residência" in lote_tipo_padrao: res_val = 1
+                    elif "Comércio" in lote_tipo_padrao: com_val = 1
+                    elif "Terreno" in lote_tipo_padrao: tb_val = 1
+                    else: out_val = 1
+
+                    st.session_state.reconhecimento.append({
+                        "Quarteirao": str(lote_quarteirao).strip(),
+                        "Lado": int(lote_lado),
+                        "Residencias": res_val,
+                        "Outros": out_val,
+                        "TB": tb_val,
+                        "Comercio": com_val,
+                        "Total": 1,
+                        "Data": data_str,
+                        "Semana": int(lote_semana),
+                        "Auditor": lote_agente,
+                    })
+
+                salvar_estado_local()
+                st.success(f"🎉 Sucesso! {total_gerado} imóveis foram gerados e salvos de uma só vez para o Quarteirão {lote_quarteirao}, Lado {lote_lado}!")
+                st.rerun()
+
+
+# ==================== ABA 3: BUSCA AVANÇADA ====================
 with aba_busca:
     st.subheader("🔍 Busca Avançada e Edição Direta (Estilo Planilha)")
     st.markdown("Use os filtros para encontrar os lançamentos. **Clique na célula que deseja alterar, digite o novo valor e pressione Enter**. Depois, clique no botão salvar abaixo!")
@@ -254,7 +440,7 @@ with aba_busca:
             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].astype(str) == str(filtro_quarteirao)]
         if filtro_tipo != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"] == filtro_tipo]
-        if filtro_cond != "Todas":
+        if filtro_cond != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Vistoria"] == filtro_cond]
 
         if termo:
@@ -292,7 +478,8 @@ with aba_busca:
     else:
         st.info("Nenhum registro cadastrado.")
 
-# ==================== ABA 3: GERENCIAR LANÇAMENTOS ====================
+
+# ==================== ABA 4: GERENCIAR LANÇAMENTOS ====================
 with aba_gerenciar:
     st.subheader("✏️ Gerenciamento e Edição Inteligente em Massa")
     st.markdown("Aqui você pode alterar um dado incorreto (como um quarteirão inteiro ou agente) **em todos os registros de uma só vez**, ou gerenciar lançamentos individualmente.")
@@ -425,7 +612,8 @@ with aba_gerenciar:
     else:
         st.info("Nenhum lançamento registrado para gerenciar.")
 
-# ==================== ABA 4: ANÁLISE DE TRATAMENTOS ====================
+
+# ==================== ABA 5: ANÁLISE DE TRATAMENTOS ====================
 with aba_tratamentos:
     st.subheader("🧪 Painel de Tratamentos e Comparativo entre Quarteirões")
     if st.session_state.vistorias:
@@ -479,7 +667,8 @@ with aba_tratamentos:
     else:
         st.info("Nenhum lançamento registrado no sistema.")
 
-# ==================== ABA 5: IMÓVEIS FECHADOS & RECUSAS ====================
+
+# ==================== ABA 6: IMÓVEIS FECHADOS & RECUSAS ====================
 with aba_fechadas:
   st.subheader("🚪 Painel de Imóveis Fechados e Recusas")
   if st.session_state.vistorias:
@@ -490,7 +679,8 @@ with aba_fechadas:
   else:
     st.info("Sem dados cadastrados.")
 
-# ==================== ABA 6: RELATÓRIO SEMANAL ====================
+
+# ==================== ABA 7: RELATÓRIO SEMANAL ====================
 with aba_semanal:
   st.subheader("📈 Boletim Semanal Consolidado")
   if st.session_state.vistorias:
@@ -500,7 +690,8 @@ with aba_semanal:
   else:
     st.info("Sem dados cadastrados.")
 
-# ==================== ABA 7: CENTRAL DE SEGURANÇA ====================
+
+# ==================== ABA 8: CENTRAL DE SEGURANÇA ====================
 with aba_backup:
   st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
   col_b1, col_b2 = st.columns(2)
@@ -603,7 +794,8 @@ with aba_backup:
       else:
           st.warning("⚠️ Marque a caixa de confirmação acima.")
 
-# ==================== ABA 8: RECONHECIMENTO GEOGRÁFICO ====================
+
+# ==================== ABA 9: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
     st.subheader("📊 Reconhecimento Geográfico (Comparativo e Auditoria)")
     if st.session_state.reconhecimento:
@@ -633,7 +825,8 @@ with aba_reconhecimento:
     else:
         st.info("Sem dados de reconhecimento geográfico.")
 
-# ==================== ABA 9: LEITURA INTELIGENTE POR FOTO ====================
+
+# ==================== ABA 10: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
     st.subheader("📸 Leitura Inteligente de Boletim por Foto (IA)")
     api_key_input = st.text_input("🔑 Chave de API do Gemini", type="password", key="input_gemini_key_foto")

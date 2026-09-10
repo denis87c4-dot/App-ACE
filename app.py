@@ -50,7 +50,6 @@ def salvar_estado_local():
             
             # RECONSTRUÇÃO AUTOMÁTICA E SOMA DO RECONHECIMENTO GEOGRÁFICO
             lista_rec_cons = []
-            # Agrupando por Quarteirão e Lado para somar corretamente todas as ocorrências
             grupos = df_v_temp.groupby(["Quarteirao", "Lado"])
             for (q_val, l_val), grupo in grupos:
                 res_val = int(grupo["Tipo Imovel"].str.contains("Residência", case=False, na=False).sum())
@@ -89,20 +88,18 @@ def colorir_tabela_vistorias(df):
     def highlight_rows(row):
         color = ''
         if 'Fechada' in str(row.get('Vistoria', '')):
-            color = 'background-color: #fff3cd; color: #856404;' # Amarelo suave para Fechadas/Recusas
+            color = 'background-color: #fff3cd; color: #856404;' 
         elif int(row.get('Tratados', 0)) > 0 or float(row.get('Gramas', 0)) > 0:
-            color = 'background-color: #d4edda; color: #155724;' # Verde suave para Tratados
+            color = 'background-color: #d4edda; color: #155724;' 
         elif int(row.get('Tubitos', 0)) > 0 or int(row.get('Eliminados', 0)) > 0:
-            color = 'background-color: #f8d7da; color: #721c24;' # Vermelho suave para Tubitos/Eliminados
+            color = 'background-color: #f8d7da; color: #721c24;' 
         return [color] * len(row)
-    
     return df.style.apply(highlight_rows, axis=1)
 
 def expandir_sequencia_casas(texto_casas):
     """Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas"""
     if not texto_casas:
         return []
-    
     casas_finais = []
     partes = str(texto_casas).split(",")
     for parte in partes:
@@ -350,7 +347,7 @@ with aba_lote:
                 st.success(f"🎉 Sucesso! {total_gerado} imóveis foram gerados e salvos!")
                 st.rerun()
 
-# ==================== ABA 3: BUSCA AVANÇADA COM FILTROS DINÂMICOS ====================
+# ==================== ABA 3: BUSCA AVANÇADA ====================
 with aba_busca:
     st.subheader("🔍 Busca Avançada, Filtros Dinâmicos e Edição Direta")
     if st.session_state.vistorias:
@@ -406,45 +403,107 @@ with aba_busca:
     else:
         st.info("Nenhum registro cadastrado.")
 
-# ==================== ABA 4: GERENCIAR LANÇAMENTOS ====================
+# ==================== ABA 4: GERENCIAR LANÇAMENTOS (COM FILTROS) ====================
 with aba_gerenciar:
     st.subheader("✏️ Gerenciamento e Edição Inteligente em Massa")
     if st.session_state.vistorias:
+        st.info("Utilize os filtros abaixo para selecionar exatamente quais registros deseja atualizar em massa, evitando alterações indesejadas.")
+        
+        df_massa_base = pd.DataFrame(st.session_state.vistorias)
+        
+        # Filtros de escopo para a edição em massa
+        gm1, gm2, gm3 = st.columns(3)
+        with gm1:
+            filtro_m_ciclo = st.selectbox("Filtrar por Ciclo Alvo", ["Todos os Ciclos"] + sorted(df_massa_base["Ciclo"].unique().tolist()))
+        with gm2:
+            filtro_m_agente = st.selectbox("Filtrar por Agente Alvo", ["Todos os Agentes"] + sorted(df_massa_base["Agente"].unique().tolist()))
+        with gm3:
+            filtro_m_quart = st.selectbox("Filtrar por Quarteirão Alvo", ["Todos os Quarteirões"] + sorted(df_massa_base["Quarteirao"].unique().tolist()))
+
+        df_alvo_massa = df_massa_base.copy()
+        if filtro_m_ciclo != "Todos os Ciclos":
+            df_alvo_massa = df_alvo_massa[df_alvo_massa["Ciclo"] == filtro_m_ciclo]
+        if filtro_m_agente != "Todos os Agentes":
+            df_alvo_massa = df_alvo_massa[df_alvo_massa["Agente"] == filtro_m_agente]
+        if filtro_m_quart != "Todos os Quarteirões":
+            df_alvo_massa = df_alvo_massa[df_alvo_massa["Quarteirao"] == filtro_m_quart]
+
+        st.warning(f"⚠️ A alteração em massa afetará apenas os **{len(df_alvo_massa)}** registros correspondentes aos filtros acima (de um total de {len(df_massa_base)}).")
+
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
         with col_m1: coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"])
-        with col_m2: valor_antigo = st.text_input("Valor antigo")
+        with col_m2: valor_antigo = st.text_input("Valor antigo a substituir")
         with col_m3: valor_novo = st.text_input("Novo valor")
         with col_m4:
             st.markdown("<br>", unsafe_allow_html=True)
-            btn_aplicar_massa = st.button("🚀 Aplicar em Massa", type="primary", use_container_width=True)
+            btn_aplicar_massa = st.button("🚀 Aplicar em Massa Filtrado", type="primary", use_container_width=True)
 
         if btn_aplicar_massa and valor_antigo:
             alterados = 0
-            for item in st.session_state.vistorias:
+            # Convertendo a lista geral para atualizar com base nos índices filtrados
+            indices_validos = df_alvo_massa.index.tolist()
+            for idx in indices_validos:
+                item = st.session_state.vistorias[idx]
                 if str(item.get(coluna_alvo, "")).strip().lower() == valor_antigo.strip().lower():
                     item[coluna_alvo] = valor_novo.strip()
                     alterados += 1
             salvar_estado_local()
-            st.success(f"✅ {alterados} registros atualizados em massa!")
+            st.success(f"✅ {alterados} registros atualizados com sucesso!")
             st.rerun()
     else:
         st.info("Nenhum lançamento registrado.")
 
-# ==================== ABA 5: ANÁLISE DE TRATAMENTOS ====================
+# ==================== ABA 5: ANÁLISE DE TRATAMENTOS (COMPLETA) ====================
 with aba_tratamentos:
-    st.subheader("🧪 Painel de Tratamentos")
+    st.subheader("🧪 Painel Avançado de Análise de Tratamentos e Larvicidas")
     if st.session_state.vistorias:
         df_trat = pd.DataFrame(st.session_state.vistorias)
+        
+        # Filtrar apenas os imóveis que tiveram tratamentos ou gramas aplicadas
+        df_apenas_tratados = df_trat[(df_trat["Tratados"] > 0) | (df_trat["Gramas"] > 0)]
+        
         tot_tratados = int(df_trat["Tratados"].sum()) if "Tratados" in df_trat.columns else 0
         tot_gramas = float(df_trat["Gramas"].sum()) if "Gramas" in df_trat.columns else 0.0
-        
-        tm1, tm2 = st.columns(2)
+        tot_depositos = int(df_trat["Depósitos"].sum()) if "Depósitos" in df_trat.columns else 0
+        media_gramas = (tot_gramas / tot_tratados) if tot_tratados > 0 else 0.0
+
+        tm1, tm2, tm3, tm4 = st.columns(4)
         tm1.metric("🏠 Imóveis Tratados", tot_tratados)
-        tm2.metric("⚖️ Larvicida Aplicado (g)", f"{tot_gramas:.1f}g")
+        tm2.metric("⚖️ Larvicida Total Aplicado", f"{tot_gramas:.1f}g")
+        tm3.metric("🚰 Depósitos Tratados", tot_depositos)
+        tm4.metric("📊 Média de Gramas / Imóvel", f"{media_gramas:.2f}g")
+
+        st.markdown("---")
+        if not df_apenas_tratados.empty:
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown("### 📊 Larvicida (g) por Quarteirão")
+                df_q_gramas = df_apenas_tratados.groupby("Quarteirao")["Gramas"].sum().reset_index()
+                chart_q = alt.Chart(df_q_gramas).mark_bar(color="#28a745").encode(
+                    x=alt.X("Quarteirao:N", title="Quarteirão"),
+                    y=alt.Y("Gramas:Q", title="Total Gramas (g)"),
+                    tooltip=["Quarteirao", "Gramas"]
+                ).interactive()
+                st.altair_chart(chart_q, use_container_width=True)
+
+            with col_g2:
+                st.markdown("### 👨‍💼 Tratamentos por Agente")
+                df_a_trat = df_apenas_tratados.groupby("Agente")["Tratados"].sum().reset_index()
+                chart_a = alt.Chart(df_a_trat).mark_bar(color="#17a2b8").encode(
+                    x=alt.X("Agente:N", title="Agente"),
+                    y=alt.Y("Tratados:Q", title="Imóveis Tratados"),
+                    tooltip=["Agente", "Tratados"]
+                ).interactive()
+                st.altair_chart(chart_a, use_container_width=True)
+
+            st.markdown("### 📋 Relação Detalhada de Imóveis Tratados")
+            st.dataframe(colorir_tabela_vistorias(df_apenas_tratados), use_container_width=True)
+        else:
+            st.info("Nenhum imóvel com registro de tratamento ou aplicação de larvicida encontrado até o momento.")
     else:
         st.info("Nenhum lançamento registrado.")
 
-# ==================== ABA 6: IMÓVEIS FECHADOS & RECUSAS (COM EDIÇÃO RÁPIDA) ====================
+# ==================== ABA 6: IMÓVEIS FECHADOS & RECUSAS ====================
 with aba_fechadas:
     st.subheader("🚪 Imóveis Fechados e Recusas (Recuperação Rápida)")
     if st.session_state.vistorias:
@@ -457,7 +516,6 @@ with aba_fechadas:
             st.markdown("### 🔄 Recuperar Imóvel Fechado Instantaneamente")
             st.info("Se encontrou um morador e realizou a vistoria em um imóvel que estava fechado, selecione-o abaixo para mudar o status para **Recuperada** ou **Normal** sem precisar procurar na lista geral:")
             
-            # Criando uma lista legível para o selectbox
             df_fechados["Opcao_Display"] = df_fechados.apply(lambda r: f"Quarteirão: {r['Quarteirao']} | Rua: {r['Rua']} | Nº: {r['Casa']} (Lado {r['Lado']})", axis=1)
             
             imovel_escolhido = st.selectbox("Selecione o Imóvel Fechado para Atualizar", options=df_fechados["Opcao_Display"].tolist())
@@ -555,7 +613,7 @@ with aba_backup:
 # ==================== ABA 9: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
     st.subheader("📊 Reconhecimento Geográfico Consolidado")
-    salvar_estado_local() # Garante atualização imediata
+    salvar_estado_local()
     if st.session_state.reconhecimento:
         df_rec = pd.DataFrame(st.session_state.reconhecimento)
         st.dataframe(df_rec, use_container_width=True)

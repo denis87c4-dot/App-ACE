@@ -361,7 +361,7 @@ with aba_lote:
                 st.success(f"🎉 Sucesso! {total_gerado} imóveis foram gerados e salvos!")
                 st.rerun()
 
-# ==================== ABA 3: BUSCA AVANCADA COM FILTROS DINÂMICOS PODEROSOS ====================
+# ==================== ABA 3: BUSCA AVANCADA COM FILTROS DINÂMICOS ====================
 with aba_busca:
     st.subheader("🔍 Busca Avançada & Filtros Dinâmicos Poderosos")
     if st.session_state.vistorias:
@@ -373,7 +373,6 @@ with aba_busca:
             if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
                 df_base[col] = df_base[col].astype(str)
 
-        # 🎛️ PAINEL MULTI-FILTROS DINÂMICOS
         st.markdown("### 🎛️ Painel de Filtros Dinâmicos")
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
         
@@ -394,7 +393,6 @@ with aba_busca:
         
         df_filtrado = df_base.copy()
         
-        # Aplicando filtros dinâmicos
         if filtro_q:
             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].isin(filtro_q)]
         if filtro_a:
@@ -409,17 +407,14 @@ with aba_busca:
 
         st.info(f"📊 Exibindo **{len(df_filtrado)}** de **{len(df_base)}** registros totais.")
 
-        # Exibição colorida
         st.dataframe(colorir_tabela_vistorias(df_filtrado), use_container_width=True)
 
         st.markdown("### ✏️ Edição Direta na Tabela Filtrada")
         df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca_avancada")
 
         if st.button("💾 Salvar Modificações da Tabela", type="primary", use_container_width=True):
-            # Substitui ou atualiza no session_state preservando registros não filtrados
             indices_mantidos = df_editado.index.tolist()
             df_geral_atual = pd.DataFrame(st.session_state.vistorias)
-            # Atualiza o subset editado
             for idx in indices_mantidos:
                 if idx in df_geral_atual.index:
                     for col in df_editado.columns:
@@ -431,37 +426,74 @@ with aba_busca:
     else:
         st.info("Nenhum registro cadastrado no sistema.")
 
-# ==================== ABA 4: GERENCIAR LANÇAMENTOS (EDIÇÃO EM MASSA PODEROSA) ====================
+# ==================== ABA 4: GERENCIAR LANÇAMENTOS (COM SELEÇÃO POR CHECKBOX) ====================
 with aba_gerenciar:
-    st.subheader("✏️ Gerenciamento e Edição em Massa Avançada")
+    st.subheader("✏️ Gerenciamento e Seleção de Lançamentos por Checkbox")
     if st.session_state.vistorias:
         df_gerencia = pd.DataFrame(st.session_state.vistorias)
         
-        st.markdown("Use as opções abaixo para alterar dados em massa de forma inteligente com base em critérios de filtro.")
+        # Adiciona a coluna de seleção interativa com checkbox na tabela
+        df_gerencia.insert(0, "Selecionar", False)
         
-        col_em1, col_em2, col_em3 = st.columns(3)
-        with col_em1:
-            coluna_alvo = st.selectbox("Coluna a ser alterada", ["Agente", "Ciclo", "Semana", "Quarteirao", "Tipo Imovel", "Vistoria"])
-        with col_em2:
-            valor_antigo_filtro = st.text_input("Filtrar registros onde a coluna é igual a:", placeholder="Ex: Nome antigo do Agente")
-        with col_em3:
-            valor_novo_massa = st.text_input("Novo valor unificado:", placeholder="Ex: Novo Nome do Agente")
-
-        btn_massa_avancado = st.button("⚡ Executar Substituição em Massa", type="primary", use_container_width=True)
-
-        if btn_massa_avancado and valor_antigo_filtro:
-            contador_alterados = 0
-            for item in st.session_state.vistorias:
-                val_atual = str(item.get(coluna_alvo, "")).strip()
-                if val_atual.lower() == valor_antigo_filtro.strip().lower():
-                    item[coluna_alvo] = valor_novo_massa.strip()
-                    contador_alterados += 1
-            salvar_estado_local()
-            st.success(f"✅ Sucesso! {contador_alterados} registros tiveram a coluna **{coluna_alvo}** alterada para '**{valor_novo_massa}**'.")
-            st.rerun()
-            
+        st.markdown("💡 **Dica:** Marque a caixinha (**Selecionar**) nos registros desejados na tabela abaixo e escolha a ação logo em seguida.")
+        
+        # Exibe a tabela interativa para marcar as linhas
+        df_selecao_editada = st.data_editor(
+            df_gerencia,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Selecionar": st.column_config.CheckboxColumn(
+                    "Selecionar",
+                    help="Marque para selecionar este lançamento",
+                    default=False,
+                )
+            },
+            key="tabela_gerenciar_checkbox"
+        )
+        
+        # Filtra apenas as linhas onde a coluna 'Selecionar' está marcada como True
+        linhas_selecionadas = df_selecao_editada[df_selecao_editada["Selecionar"] == True]
+        
         st.markdown("---")
-        st.markdown("### 🗑️ Exclusão Seletiva em Massa por Quarteirão")
+        st.markdown(f"📌 **Registros selecionados no momento:** `{len(linhas_selecionadas)}`")
+        
+        if len(linhas_selecionadas) > 0:
+            st.markdown("### ⚡ Ações em Lote para os Itens Marcados")
+            
+            col_acao1, col_acao2 = st.columns(2)
+            
+            with col_acao1:
+                st.markdown("#### 🔄 Alterar Atributo dos Selecionados")
+                coluna_atribuicao = st.selectbox("Atributo a alterar", ["Agente", "Ciclo", "Semana", "Quarteirao", "Tipo Imovel", "Vistoria"], key="col_atrib_sel")
+                novo_valor_atribuicao = st.text_input("Novo valor para os itens marcados", placeholder="Ex: Novo Agente", key="val_atrib_sel")
+                
+                if st.button("🚀 Aplicar Alteração nos Selecionados", type="primary"):
+                    indices_para_mudar = linhas_selecionadas.index.tolist()
+                    for idx in indices_para_mudar:
+                        if idx < len(st.session_state.vistorias):
+                            st.session_state.vistorias[idx][coluna_atribuicao] = novo_valor_atribuicao.strip()
+                    salvar_estado_local()
+                    st.success(f"✅ {len(indices_para_mudar)} registros atualizados com sucesso!")
+                    st.rerun()
+
+            with col_acao2:
+                st.markdown("#### 🗑️ Excluir os Selecionados")
+                st.warning("Atenção: Esta ação removerá permanentemente os registros marcados.")
+                if st.button("🗑️ Deletar Registros Marcados", type="secondary"):
+                    indices_para_remover = set(linhas_selecionadas.index.tolist())
+                    # Filtra mantendo apenas os índices que NÃO foram marcados para remoção
+                    st.session_state.vistorias = [
+                        item for i, item in enumerate(st.session_state.vistorias) if i not in indices_para_remover
+                    ]
+                    salvar_estado_local()
+                    st.success(f"🗑️ {len(indices_para_remover)} registros foram removidos com sucesso!")
+                    st.rerun()
+        else:
+            st.info("ℹ️ Nenhuma linha marcada na tabela acima. Selecione ao menos uma caixinha para habilitar as opções de edição/exclusão em lote.")
+
+        st.markdown("---")
+        st.markdown("### 🗑️ Exclusão Seletiva em Massa por Quarteirão Inteiro")
         q_para_apagar = st.selectbox("Selecione um Quarteirão para apagar todos os seus registros", options=[""] + sorted(df_gerencia["Quarteirao"].unique().tolist()))
         if q_para_apagar:
             if st.button(f"🗑️ Deletar todos os dados do Quarteirão {q_para_apagar}", type="secondary"):

@@ -54,6 +54,20 @@ def salvar_estado_local():
     except Exception as e:
         st.error(f"Erro ao salvar dados localmente: {e}")
 
+def colorir_tabela_vistorias(df):
+    """Aplica cores condicionais baseadas no status da vistoria e ações entomológicas"""
+    def highlight_rows(row):
+        color = ''
+        if 'Fechada' in str(row.get('Vistoria', '')):
+            color = 'background-color: #fff3cd; color: #856404;' # Amarelo suave para Fechadas/Recusas
+        elif int(row.get('Tratados', 0)) > 0 or float(row.get('Gramas', 0)) > 0:
+            color = 'background-color: #d4edda; color: #155724;' # Verde suave para Tratados
+        elif int(row.get('Tubitos', 0)) > 0 or int(row.get('Eliminados', 0)) > 0:
+            color = 'background-color: #f8d7da; color: #721c24;' # Vermelho suave para Tubitos/Eliminados
+        return [color] * len(row)
+    
+    return df.style.apply(highlight_rows, axis=1)
+
 def expandir_sequencia_casas(texto_casas):
     """
     Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas
@@ -411,7 +425,7 @@ with aba_fechadas:
         df_v = pd.DataFrame(st.session_state.vistorias)
         df_fechados = df_v[df_v["Vistoria"].str.contains("Fechada", case=False, na=False)]
         st.metric("Total Fechadas / Recusas", len(df_fechados))
-        st.dataframe(df_fechados, use_container_width=True)
+        st.dataframe(colorir_tabela_vistorias(df_fechados), use_container_width=True)
     else:
         st.info("Sem dados cadastrados.")
 
@@ -427,31 +441,45 @@ with aba_semanal:
 
 # ==================== ABA 8: CENTRAL DE BACKUP ====================
 with aba_backup:
-    st.subheader("🔐 Central de Segurança e Backup")
-    col_b1, col_b2 = st.columns(2)
+    st.subheader("🔐 Central de Segurança, Backup de Emergência e Compactação ZIP")
+    salvar_estado_local()
+    
+    col_b1, col_b2, col_b3 = st.columns(3)
 
     with col_b1:
-        st.markdown("### 📤 Exportar Dados")
-        salvar_estado_local()
+        st.markdown("### 📄 Exportar CSV Simples")
         if os.path.exists(ARQUIVO_VISTORIAS):
             with open(ARQUIVO_VISTORIAS, "rb") as f:
                 st.download_button("📥 Baixar vistorias_diarias.csv", data=f, file_name="vistorias_diarias.csv", mime="text/csv", use_container_width=True)
 
     with col_b2:
-        st.markdown("### 📥 Importação de Planilha CSV")
-        arquivo_upload = st.file_uploader("Enviar arquivo CSV", type=["csv", "txt"])
+        st.markdown("### 📦 Backup Compactado (ZIP)")
+        if st.button("🗜️ Gerar Arquivo ZIP de Emergência", use_container_width=True):
+            zip_nome = "backup_emergencia_ace.zip"
+            with zipfile.ZipFile(zip_nome, 'w') as zipf:
+                if os.path.exists(ARQUIVO_VISTORIAS):
+                    zipf.write(ARQUIVO_VISTORIAS)
+                if os.path.exists(ARQUIVO_RECONHECIMENTO):
+                    zipf.write(ARQUIVO_RECONHECIMENTO)
+            
+            with open(zip_nome, "rb") as f:
+                st.download_button("📥 Baixar ZIP de Emergência", data=f, file_name=zip_nome, mime="application/zip", use_container_width=True)
 
+    with col_b3:
+        st.markdown("### 🔄 Restaurar de Backup")
+        arquivo_upload = st.file_uploader("Enviar CSV ou ZIP", type=["csv", "txt", "zip"])
         if arquivo_upload is not None:
             try:
-                df_novo_importado = pd.read_csv(arquivo_upload)
-                st.success("✅ Arquivo lido com sucesso!")
-                st.dataframe(df_novo_importado.head(5), use_container_width=True)
-
-                if st.button("🔄 Confirmar e Inserir na Base", type="primary", use_container_width=True):
+                if arquivo_upload.name.endswith('.zip'):
+                    with zipfile.ZipFile(arquivo_upload, 'r') as z:
+                        z.extractall()
+                    st.success("✅ Backup ZIP restaurado com sucesso no disco!")
+                else:
+                    df_novo_importado = pd.read_csv(arquivo_upload)
                     st.session_state.vistorias.extend(df_novo_importado.to_dict("records"))
                     salvar_estado_local()
-                    st.success("✅ Dados importados com sucesso!")
-                    st.rerun()
+                    st.success("✅ Dados do CSV incorporados com sucesso!")
+                st.rerun()
             except Exception as e:
                 st.error(f"❌ Erro ao processar o arquivo: {e}")
 

@@ -635,8 +635,8 @@ with aba_reconhecimento:
         st.markdown("---")
         st.markdown(f"### 📋 Tabela Principal Consolidada por Quarteirão ({ciclo_selecionado_rec})")
         
-        # Agrupando por Quarteirão para a tabela principal ficar somada perfeitamente
-        df_tabela_mestre = df_rec_filtrado.groupby(["Quarteirao", "Lado"]).agg({
+        # AGREGAÇÃO PURAMENTE POR QUARTEIRÃO (Soma todos os lados em uma única linha por quarteirão)
+        df_tabela_mestre = df_rec_filtrado.groupby("Quarteirao").agg({
             "Residencias": "sum",
             "Comercio": "sum",
             "TB": "sum",
@@ -656,7 +656,7 @@ with aba_reconhecimento:
             chart_rec_q = alt.Chart(df_tabela_mestre).mark_bar(color="#007bff").encode(
                 x=alt.X("Quarteirao:N", title="Quarteirão"),
                 y=alt.Y("Total:Q", title="Total de Imóveis"),
-                tooltip=["Quarteirao", "Lado", "Total", "Residencias"]
+                tooltip=["Quarteirao", "Total", "Residencias", "Comercio"]
             ).interactive()
             st.altair_chart(chart_rec_q, use_container_width=True)
 
@@ -701,7 +701,7 @@ with aba_reconhecimento:
             ).interactive()
             st.altair_chart(chart_comp, use_container_width=True)
         else:
-            st.info("💡 Dica: Quando você registrar dados em mais de um ciclo (ex: Ciclo 1 e Ciclo 2), aparecerá aqui um painel comparativo completo entre eles.")
+            st.info("💡 Dica: Quando você registrar dados em mais de un ciclo (ex: Ciclo 1 e Ciclo 2), aparecerá aqui um painel comparativo completo entre eles.")
     else:
         st.info("Sem dados de reconhecimento geográfico acumulados.")
 

@@ -42,16 +42,19 @@ if "reconhecimento" not in st.session_state:
         st.session_state.reconhecimento = []
 
 def salvar_estado_local():
-    """Função auxiliar para salvar os dados instantaneamente no disco local e recalcular reconhecimento"""
+    """Função auxiliar para salvar os dados instantaneamente no disco local e recalcular o reconhecimento por Ciclo"""
     try:
         if st.session_state.vistorias:
             df_v_temp = pd.DataFrame(st.session_state.vistorias)
             df_v_temp.to_csv(ARQUIVO_VISTORIAS, index=False)
             
-            # RECONSTRUÇÃO AUTOMÁTICA E SOMA DO RECONHECIMENTO GEOGRÁFICO
+            # RECONSTRUÇÃO AUTOMÁTICA SEPARANDO POR CICLO, QUARTEIRÃO E LADO
             lista_rec_cons = []
-            grupos = df_v_temp.groupby(["Quarteirao", "Lado"])
-            for (q_val, l_val), grupo in grupos:
+            if "Ciclo" not in df_v_temp.columns:
+                df_v_temp["Ciclo"] = "Ciclo 1"
+                
+            grupos = df_v_temp.groupby(["Ciclo", "Quarteirao", "Lado"])
+            for (ciclo_val, q_val, l_val), grupo in grupos:
                 res_val = int(grupo["Tipo Imovel"].str.contains("Residência", case=False, na=False).sum())
                 com_val = int(grupo["Tipo Imovel"].str.contains("Comércio", case=False, na=False).sum())
                 tb_val = int(grupo["Tipo Imovel"].str.contains("Terreno", case=False, na=False).sum())
@@ -60,12 +63,13 @@ def salvar_estado_local():
                 
                 primeira_linha = grupo.iloc[0]
                 lista_rec_cons.append({
+                    "Ciclo": str(ciclo_val),
                     "Quarteirao": str(q_val),
                     "Lado": int(l_val),
                     "Residencias": res_val,
-                    "Outros": out_val,
-                    "TB": tb_val,
                     "Comercio": com_val,
+                    "TB": tb_val,
+                    "Outros": out_val,
                     "Total": total_imoveis,
                     "Data": primeira_linha.get("Data", datetime.today().strftime("%d/%m/%Y")),
                     "Semana": int(primeira_linha.get("Semana", 1)),
@@ -403,15 +407,14 @@ with aba_busca:
     else:
         st.info("Nenhum registro cadastrado.")
 
-# ==================== ABA 4: GERENCIAR LANÇAMENTOS (COM FILTROS) ====================
+# ==================== ABA 4: GERENCIAR LANÇAMENTOS ====================
 with aba_gerenciar:
     st.subheader("✏️ Gerenciamento e Edição Inteligente em Massa")
     if st.session_state.vistorias:
-        st.info("Utilize os filtros abaixo para selecionar exatamente quais registros deseja atualizar em massa, evitando alterações indesejadas.")
+        st.info("Utilize os filtros abaixo para selecionar exatamente quais registros deseja atualizar em massa.")
         
         df_massa_base = pd.DataFrame(st.session_state.vistorias)
         
-        # Filtros de escopo para a edição em massa
         gm1, gm2, gm3 = st.columns(3)
         with gm1:
             filtro_m_ciclo = st.selectbox("Filtrar por Ciclo Alvo", ["Todos os Ciclos"] + sorted(df_massa_base["Ciclo"].unique().tolist()))
@@ -428,7 +431,7 @@ with aba_gerenciar:
         if filtro_m_quart != "Todos os Quarteirões":
             df_alvo_massa = df_alvo_massa[df_alvo_massa["Quarteirao"] == filtro_m_quart]
 
-        st.warning(f"⚠️ A alteração em massa afetará apenas os **{len(df_alvo_massa)}** registros correspondentes aos filtros acima (de um total de {len(df_massa_base)}).")
+        st.warning(f"⚠️ A alteração em massa afetará apenas os **{len(df_alvo_massa)}** registros correspondentes aos filtros acima.")
 
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
         with col_m1: coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"])
@@ -440,7 +443,6 @@ with aba_gerenciar:
 
         if btn_aplicar_massa and valor_antigo:
             alterados = 0
-            # Convertendo a lista geral para atualizar com base nos índices filtrados
             indices_validos = df_alvo_massa.index.tolist()
             for idx in indices_validos:
                 item = st.session_state.vistorias[idx]
@@ -453,13 +455,11 @@ with aba_gerenciar:
     else:
         st.info("Nenhum lançamento registrado.")
 
-# ==================== ABA 5: ANÁLISE DE TRATAMENTOS (COMPLETA) ====================
+# ==================== ABA 5: ANÁLISE DE TRATAMENTOS ====================
 with aba_tratamentos:
     st.subheader("🧪 Painel Avançado de Análise de Tratamentos e Larvicidas")
     if st.session_state.vistorias:
         df_trat = pd.DataFrame(st.session_state.vistorias)
-        
-        # Filtrar apenas os imóveis que tiveram tratamentos ou gramas aplicadas
         df_apenas_tratados = df_trat[(df_trat["Tratados"] > 0) | (df_trat["Gramas"] > 0)]
         
         tot_tratados = int(df_trat["Tratados"].sum()) if "Tratados" in df_trat.columns else 0
@@ -499,7 +499,7 @@ with aba_tratamentos:
             st.markdown("### 📋 Relação Detalhada de Imóveis Tratados")
             st.dataframe(colorir_tabela_vistorias(df_apenas_tratados), use_container_width=True)
         else:
-            st.info("Nenhum imóvel com registro de tratamento ou aplicação de larvicida encontrado até o momento.")
+            st.info("Nenhum imóvel com registro de tratamento encontrado.")
     else:
         st.info("Nenhum lançamento registrado.")
 
@@ -514,7 +514,7 @@ with aba_fechadas:
         
         if not df_fechados.empty:
             st.markdown("### 🔄 Recuperar Imóvel Fechado Instantaneamente")
-            st.info("Se encontrou um morador e realizou a vistoria em um imóvel que estava fechado, selecione-o abaixo para mudar o status para **Recuperada** ou **Normal** sem precisar procurar na lista geral:")
+            st.info("Se encontrou um morador e realizou a vistoria em um imóvel fechado, selecione-o abaixo para mudar o status para **Recuperada** ou **Normal**:")
             
             df_fechados["Opcao_Display"] = df_fechados.apply(lambda r: f"Quarteirão: {r['Quarteirao']} | Rua: {r['Rua']} | Nº: {r['Casa']} (Lado {r['Lado']})", axis=1)
             
@@ -610,13 +610,98 @@ with aba_backup:
         st.success("🧹 Dados apagados com sucesso!")
         st.rerun()
 
-# ==================== ABA 9: RECONHECIMENTO GEOGRÁFICO ====================
+# ==================== ABA 9: RECONHECIMENTO GEOGRÁFICO & COMPARATIVO DE CICLOS ====================
 with aba_reconhecimento:
-    st.subheader("📊 Reconhecimento Geográfico Consolidado")
+    st.subheader("📊 Reconhecimento Geográfico Consolidado & Comparativo entre Ciclos")
     salvar_estado_local()
+    
     if st.session_state.reconhecimento:
         df_rec = pd.DataFrame(st.session_state.reconhecimento)
-        st.dataframe(df_rec, use_container_width=True)
+        
+        # 🎛️ Filtro por Ciclo para a Tabela Principal
+        ciclos_disponiveis = sorted(df_rec["Ciclo"].unique().tolist())
+        ciclo_selecionado_rec = st.selectbox("🔄 Selecione o Ciclo para Visualizar o Reconhecimento", options=ciclos_disponiveis)
+        
+        df_rec_filtrado = df_rec[df_rec["Ciclo"] == ciclo_selecionado_rec]
+        
+        # Métricas Globais do Ciclo Selecionado
+        rc1, rc2, rc3, rc4, rc5 = st.columns(5)
+        rc1.metric("🏠 Total Imóveis", int(df_rec_filtrado["Total"].sum()))
+        rc2.metric("🏡 Residências", int(df_rec_filtrado["Residencias"].sum()))
+        rc3.metric("🛒 Comércios", int(df_rec_filtrado["Comercio"].sum()))
+        rc4.metric("🧱 Terrenos Baldios", int(df_rec_filtrado["TB"].sum()))
+        rc5.metric("📌 Outros / PE", int(df_rec_filtrado["Outros"].sum()))
+
+        st.markdown("---")
+        st.markdown(f"### 📋 Tabela Principal Consolidada por Quarteirão ({ciclo_selecionado_rec})")
+        
+        # Agrupando por Quarteirão para a tabela principal ficar somada perfeitamente
+        df_tabela_mestre = df_rec_filtrado.groupby(["Quarteirao", "Lado"]).agg({
+            "Residencias": "sum",
+            "Comercio": "sum",
+            "TB": "sum",
+            "Outros": "sum",
+            "Total": "sum",
+            "Auditor": "first"
+        }).reset_index()
+        
+        st.dataframe(df_tabela_mestre, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("### 📊 Gráficos de Distribuição do Reconhecimento")
+        c_gr1, c_gr2 = st.columns(2)
+        
+        with c_gr1:
+            st.markdown("#### Total de Imóveis por Quarteirão")
+            chart_rec_q = alt.Chart(df_tabela_mestre).mark_bar(color="#007bff").encode(
+                x=alt.X("Quarteirao:N", title="Quarteirão"),
+                y=alt.Y("Total:Q", title="Total de Imóveis"),
+                tooltip=["Quarteirao", "Lado", "Total", "Residencias"]
+            ).interactive()
+            st.altair_chart(chart_rec_q, use_container_width=True)
+
+        with c_gr2:
+            st.markdown("#### Proporção por Tipo de Imóvel")
+            df_pizza = pd.DataFrame({
+                "Tipo": ["Residências", "Comércio", "Terrenos Baldios", "Outros"],
+                "Quantidade": [
+                    df_tabela_mestre["Residencias"].sum(),
+                    df_tabela_mestre["Comercio"].sum(),
+                    df_tabela_mestre["TB"].sum(),
+                    df_tabela_mestre["Outros"].sum()
+                ]
+            })
+            chart_pizza = alt.Chart(df_pizza).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(field="Quantidade", type="quantitative"),
+                color=alt.Color(field="Tipo", type="nominal"),
+                tooltip=["Tipo", "Quantidade"]
+            ).interactive()
+            st.altair_chart(chart_pizza, use_container_width=True)
+
+        # 🔄 COMPARATIVO ENTRE CICLOS
+        if len(ciclos_disponiveis) > 1:
+            st.markdown("---")
+            st.markdown("### 📈 Comparativo de Reconhecimento entre os Ciclos")
+            st.info("Veja abaixo a evolução e a variação do total de imóveis catalogados de um ciclo para o outro.")
+            
+            df_comparativo = df_rec.groupby("Ciclo").agg({
+                "Total": "sum",
+                "Residencias": "sum",
+                "Comercio": "sum",
+                "TB": "sum"
+            }).reset_index()
+            
+            st.dataframe(df_comparativo, use_container_width=True)
+            
+            chart_comp = alt.Chart(df_comparativo).mark_bar().encode(
+                x=alt.X("Ciclo:N", title="Ciclo Epidemiológico"),
+                y=alt.Y("Total:Q", title="Total Geral de Imóveis Vistoriados"),
+                color=alt.Color("Ciclo:N", legend=None),
+                tooltip=["Ciclo", "Total", "Residencias", "Comercio", "TB"]
+            ).interactive()
+            st.altair_chart(chart_comp, use_container_width=True)
+        else:
+            st.info("💡 Dica: Quando você registrar dados em mais de um ciclo (ex: Ciclo 1 e Ciclo 2), aparecerá aqui um painel comparativo completo entre eles.")
     else:
         st.info("Sem dados de reconhecimento geográfico acumulados.")
 

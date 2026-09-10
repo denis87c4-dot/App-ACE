@@ -23,6 +23,8 @@ if "vistorias" not in st.session_state:
             df_v_init = pd.read_csv(ARQUIVO_VISTORIAS)
             if "Ciclo" not in df_v_init.columns:
                 df_v_init["Ciclo"] = "Ciclo 1"
+            if "Notas" not in df_v_init.columns:
+                df_v_init["Notas"] = ""
             st.session_state.vistorias = df_v_init.to_dict("records")
         except Exception:
             st.session_state.vistorias = []
@@ -178,6 +180,9 @@ with aba_cadastro:
         with c5: depositos = st.number_input("Depósitos", min_value=0, value=0)
         with c6: litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=0.0)
 
+        st.markdown("---")
+        notas_imovel = st.text_input("📝 Notas / Observações sobre o Imóvel", placeholder="Ex: Cachorro bravo, morador ausente, etc.")
+
         submitted = st.form_submit_button("💾 Salvar Registro Diário", use_container_width=True)
 
         if submitted:
@@ -202,6 +207,7 @@ with aba_cadastro:
                     "Gramas": float(gramas),
                     "Depósitos": int(depositos),
                     "Litros": float(litros),
+                    "Notas": str(notas_imovel).strip(),
                 }
                 st.session_state.vistorias.append(novo_registro)
 
@@ -305,6 +311,7 @@ with aba_lote:
                         "Gramas": float(gramas_padrao) if foi_tratada else 0.0,
                         "Depósitos": int(depositos_padrao) if foi_tratada else 0,
                         "Litros": 0.0,
+                        "Notas": "",
                     }
                     st.session_state.vistorias.append(novo_reg)
                     total_gerado += 1
@@ -347,6 +354,7 @@ with aba_lote:
                         "Gramas": 0.0,
                         "Depósitos": 0,
                         "Litros": 0.0,
+                        "Notas": "",
                     }
                     st.session_state.vistorias.append(novo_reg)
                     total_gerado += 1
@@ -360,6 +368,9 @@ with aba_busca:
     st.subheader("🔍 Busca Avançada e Edição Direta")
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
+        if "Notas" not in df_base.columns:
+            df_base["Notas"] = ""
+            
         for col in df_base.columns:
             if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
                 df_base[col] = df_base[col].astype(str)
@@ -370,7 +381,10 @@ with aba_busca:
             mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
             df_filtrado = df_filtrado[mask]
 
-        df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic")
+        # Exibição colorida na busca avançada
+        st.dataframe(colorir_tabela_vistorias(df_filtrado), use_container_width=True)
+
+        df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca")
 
         if st.button("💾 Salvar Alterações Feitas na Tabela", type="primary", use_container_width=True):
             st.session_state.vistorias = df_editado.to_dict("records")

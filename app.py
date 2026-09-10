@@ -14,42 +14,6 @@ st.set_page_config(
 
 st.title("🛡️ Sistema de Controle de Endemias (ACE - Painel Integrado)")
 
-
-# ==================== FUNÇÃO DE ESTILIZAÇÃO DE CORES ====================
-def estilar_tabela(df):
-    """
-    Aplica formatação condicional nas linhas do DataFrame:
-    - Vermelho (#f8d7da): Quando houver Tratamento (Tratados, Gramas, Depósitos, Litros) ou Tubitos > 0.
-    - Amarelo (#fff3cd): Quando a Vistoria for 'Fechada' ou 'Recusa'.
-    """
-    def estilar_linha(row):
-        try:
-            tratados = float(row.get("Tratados", 0) or 0)
-            gramas = float(row.get("Gramas", 0) or 0)
-            litros = float(row.get("Litros", 0) or 0)
-            depositos = float(row.get("Depósitos", 0) or 0)
-            tubitos = float(row.get("Tubitos", 0) or 0)
-        except (ValueError, TypeError):
-            tratados = gramas = litros = depositos = tubitos = 0
-
-        tem_tratamento = (tratados > 0) or (gramas > 0) or (litros > 0) or (depositos > 0)
-        tem_tubitos = tubitos > 0
-
-        vistoria_str = str(row.get("Vistoria", "")).lower()
-        eh_fechado_recusa = ("fechad" in vistoria_str) or ("recusa" in vistoria_str)
-
-        # Regra 1: Tratamento ou Tubito -> Linha Vermelha
-        if tem_tratamento or tem_tubitos:
-            return ['background-color: #f8d7da; color: #721c24; font-weight: bold;'] * len(row)
-        # Regra 2: Casa Fechada ou Recusa -> Linha Amarela
-        elif eh_fechado_recusa:
-            return ['background-color: #fff3cd; color: #856404; font-weight: bold;'] * len(row)
-
-        return [''] * len(row)
-
-    return df.style.apply(estilar_linha, axis=1)
-
-
 # ==================== PERSISTÊNCIA AUTOMÁTICA EM DISCO ====================
 ARQUIVO_VISTORIAS = "vistorias_diarias.csv"
 ARQUIVO_RECONHECIMENTO = "reconhecimento.csv"
@@ -77,19 +41,17 @@ if "reconhecimento" not in st.session_state:
     else:
         st.session_state.reconhecimento = []
 
-
 def salvar_estado_local():
     """Função auxiliar para salvar os dados instantaneamente no disco local"""
     if st.session_state.vistorias:
         pd.DataFrame(st.session_state.vistorias).to_csv(ARQUIVO_VISTORIAS, index=False)
     elif os.path.exists(ARQUIVO_VISTORIAS):
         os.remove(ARQUIVO_VISTORIAS)
-
+        
     if st.session_state.reconhecimento:
         pd.DataFrame(st.session_state.reconhecimento).to_csv(ARQUIVO_RECONHECIMENTO, index=False)
     elif os.path.exists(ARQUIVO_RECONHECIMENTO):
         os.remove(ARQUIVO_RECONHECIMENTO)
-
 
 # ==================== ABAS PRINCIPAIS ====================
 (
@@ -117,144 +79,144 @@ def salvar_estado_local():
 
 # ==================== ABA 1: RELATÓRIO DIÁRIO ====================
 with aba_cadastro:
-    st.subheader("📋 Relatório Diário de Campo (Modo Rápido)")
-    st.markdown(
-        "⚡ **Modo de Campo Agilizado:** O sistema memoriza seus últimos dados"
-        " preenchidos. Ao salvar, apenas o número da casa é limpo para a próxima vistoria!"
-    )
+  st.subheader("📋 Relatório Diário de Campo (Modo Rápido)")
+  st.markdown(
+      "⚡ **Modo de Campo Agilizado:** O sistema memoriza seus últimos dados"
+      " preenchidos. Ao salvar, apenas o número da casa é limpo para a próxima"
+      " vistoria!"
+  )
 
-    historico_quart = (
-        sorted(list(set([str(v["Quarteirao"]) for v in st.session_state.vistorias if "Quarteirao" in v and v["Quarteirao"]])))
-        if st.session_state.vistorias else []
-    )
-    historico_ruas = (
-        sorted(list(set([str(v["Rua"]) for v in st.session_state.vistorias if "Rua" in v and v["Rua"]])))
-        if st.session_state.vistorias else []
-    )
-    historico_agentes = (
-        sorted(list(set([str(v["Agente"]) for v in st.session_state.vistorias if "Agente" in v and v["Agente"]])))
-        if st.session_state.vistorias else []
-    )
+  historico_quart = (
+      sorted(list(set([str(v["Quarteirao"]) for v in st.session_state.vistorias if "Quarteirao" in v and v["Quarteirao"]])))
+      if st.session_state.vistorias else []
+  )
+  historico_ruas = (
+      sorted(list(set([str(v["Rua"]) for v in st.session_state.vistorias if "Rua" in v and v["Rua"]])))
+      if st.session_state.vistorias else []
+  )
+  historico_agentes = (
+      sorted(list(set([str(v["Agente"]) for v in st.session_state.vistorias if "Agente" in v and v["Agente"]])))
+      if st.session_state.vistorias else []
+  )
 
-    with st.form("form_relatorio_diario", clear_on_submit=False):
-        col1, col2, col3 = st.columns(3)
+  with st.form("form_relatorio_diario", clear_on_submit=False):
+    col1, col2, col3 = st.columns(3)
 
-        with col1:
-            data_visita = st.date_input("Data da Visita", value=datetime.today())
-            semana_padrao = int(data_visita.strftime("%V"))
-            num_semana = st.number_input(
-                "📅 Número da Semana Epidemiológica", min_value=1, max_value=53, value=semana_padrao, step=1
-            )
-            ciclo_selecionado = st.selectbox(
-                "🔄 Ciclo Epidemiológico", ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"]
-            )
-            opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
-            sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
-            if sel_q == "➕ Digitar novo quarteirão..." or not historico_quart:
-                num_quarteirao = st.text_input("Digite o Novo Quarteirão", placeholder="Ex: 56", key="input_novo_quarteirao")
-            else:
-                num_quarteirao = sel_q
+    with col1:
+      data_visita = st.date_input("Data da Visita", value=datetime.today())
+      semana_padrao = int(data_visita.strftime("%V"))
+      num_semana = st.number_input(
+          "📅 Número da Semana Epidemiológica", min_value=1, max_value=53, value=semana_padrao, step=1
+      )
+      ciclo_selecionado = st.selectbox(
+          "🔄 Ciclo Epidemiológico", ["Ciclo 1", "Ciclo 2", "Ciclo 3", "Ciclo 4", "Ciclo 5", "Ciclo 6"]
+      )
+      opcoes_q = historico_quart + ["➕ Digitar novo quarteirão..."]
+      sel_q = st.selectbox("Nº do Quarteirão", options=opcoes_q, key="select_quarteirao")
+      if sel_q == "➕ Digitar novo quarteirão..." or not historico_quart:
+        num_quarteirao = st.text_input("Digite o Novo Quarteirão", placeholder="Ex: 56", key="input_novo_quarteirao")
+      else:
+        num_quarteirao = sel_q
 
-        with col2:
-            lado = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1)
-            opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
-            sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r, key="select_rua")
-            if sel_r == "➕ Digitar nova rua..." or not historico_ruas:
-                nome_rua = st.text_input("Digite a Nova Rua", placeholder="Ex: Rua Menino Jesus", key="input_nova_rua")
-            else:
-                nome_rua = sel_r
-            num_casa = st.text_input("Nº / Identificação do Imóvel", placeholder="Ex: 05")
+    with col2:
+      lado = st.number_input("Lado do Quarteirão", min_value=1, value=1, step=1)
+      opcoes_r = historico_ruas + ["➕ Digitar nova rua..."]
+      sel_r = st.selectbox("Nome da Rua / Logradouro", options=opcoes_r, key="select_rua")
+      if sel_r == "➕ Digitar nova rua..." or not historico_ruas:
+        nome_rua = st.text_input("Digite a Nova Rua", placeholder="Ex: Rua Menino Jesus", key="input_nova_rua")
+      else:
+        nome_rua = sel_r
+      num_casa = st.text_input("Nº / Identificação do Imóvel", placeholder="Ex: 05")
 
-        with col3:
-            tipo_imovel = st.selectbox(
-                "Tipo de Imóvel",
-                ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"]
-            )
-            hora_entrada = st.time_input("Hora de Entrada", value=datetime.now().time())
-            vistoria = st.selectbox("Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"])
-            opcoes_a = historico_agentes + ["➕ Digitar novo agente..."]
-            sel_a = st.selectbox("Agente Responsável", options=opcoes_a, key="select_agente")
-            if sel_a == "➕ Digitar novo agente..." or not historico_agentes:
-                agente_resp = st.text_input("Digite o Nome do Agente", placeholder="Ex: Denison Oliveira", key="input_novo_agente")
-            else:
-                agente_resp = sel_a
+    with col3:
+      tipo_imovel = st.selectbox(
+          "Tipo de Imóvel",
+          ["Residência (RES)", "Comércio (COM)", "Terreno Baldio (TB)", "Ponto Estratégico (PE)", "Outros (OUT)"]
+      )
+      hora_entrada = st.time_input("Hora de Entrada", value=datetime.now().time())
+      vistoria = st.selectbox("Condição da Vistoria", ["Normal", "Recuperada", "Fechada / Recusa"])
+      opcoes_a = historico_agentes + ["➕ Digitar novo agente..."]
+      sel_a = st.selectbox("Agente Responsável", options=opcoes_a, key="select_agente")
+      if sel_a == "➕ Digitar novo agente..." or not historico_agentes:
+        agente_resp = st.text_input("Digite o Nome do Agente", placeholder="Ex: Denison Oliveira", key="input_novo_agente")
+      else:
+        agente_resp = sel_a
 
-        st.markdown("---")
-        st.subheader("🔬 Dados Entomológicos e Tratamento")
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
-        with c1: eliminados = st.number_input("Eliminados", min_value=0, value=0)
-        with c2: tubitos = st.number_input("Tubitos", min_value=0, value=0)
-        with c3: imoveis_tratados = st.number_input("Tratados", min_value=0, value=0)
-        with c4: gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=0.0)
-        with c5: depositos = st.number_input("Depósitos", min_value=0, value=0)
-        with c6: litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=0.0)
+    st.markdown("---")
+    st.subheader("🔬 Dados Entomológicos e Tratamento")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1: eliminados = st.number_input("Eliminados", min_value=0, value=0)
+    with c2: tubitos = st.number_input("Tubitos", min_value=0, value=0)
+    with c3: imoveis_tratados = st.number_input("Tratados", min_value=0, value=0)
+    with c4: gramas = st.number_input("Gramas (g)", min_value=0.0, format="%.1f", value=0.0)
+    with c5: depositos = st.number_input("Depósitos", min_value=0, value=0)
+    with c6: litros = st.number_input("Litros (L)", min_value=0.0, format="%.1f", value=0.0)
 
-        submitted = st.form_submit_button("💾 Salvar Registro Diário", use_container_width=True)
+    submitted = st.form_submit_button("💾 Salvar Registro Diário", use_container_width=True)
 
-        if submitted:
-            if not num_quarteirao or not nome_rua or not num_casa:
-                st.error("⚠️ Preencha Quarteirão, Rua e Número da Casa.")
-            else:
-                novo_registro = {
-                    "Data": data_visita.strftime("%d/%m/%Y"),
-                    "Semana": int(num_semana),
-                    "Ciclo": ciclo_selecionado,
-                    "Quarteirao": str(num_quarteirao).strip(),
-                    "Lado": int(lado),
-                    "Rua": str(nome_rua).strip(),
-                    "Casa": str(num_casa).strip(),
-                    "Tipo Imovel": tipo_imovel,
-                    "Hora": hora_entrada.strftime("%H:%M"),
-                    "Vistoria": vistoria,
-                    "Agente": str(agente_resp).strip(),
-                    "Eliminados": int(eliminados),
-                    "Tubitos": int(tubitos),
-                    "Tratados": int(imoveis_tratados),
-                    "Gramas": float(gramas),
-                    "Depósitos": int(depositos),
-                    "Litros": float(litros),
-                }
-                st.session_state.vistorias.append(novo_registro)
+    if submitted:
+      if not num_quarteirao or not nome_rua or not num_casa:
+        st.error("⚠️ Preencha Quarteirão, Rua e Número da Casa.")
+      else:
+        novo_registro = {
+            "Data": data_visita.strftime("%d/%m/%Y"),
+            "Semana": int(num_semana),
+            "Ciclo": ciclo_selecionado,
+            "Quarteirao": str(num_quarteirao).strip(),
+            "Lado": int(lado),
+            "Rua": str(nome_rua).strip(),
+            "Casa": str(num_casa).strip(),
+            "Tipo Imovel": tipo_imovel,
+            "Hora": hora_entrada.strftime("%H:%M"),
+            "Vistoria": vistoria,
+            "Agente": str(agente_resp).strip(),
+            "Eliminados": int(eliminados),
+            "Tubitos": int(tubitos),
+            "Tratados": int(imoveis_tratados),
+            "Gramas": float(gramas),
+            "Depósitos": int(depositos),
+            "Litros": float(litros),
+        }
+        st.session_state.vistorias.append(novo_registro)
 
-                res_val, com_val, tb_val, out_val = 0, 0, 0, 0
-                if "Residência" in tipo_imovel: res_val = 1
-                elif "Comércio" in tipo_imovel: com_val = 1
-                elif "Terreno" in tipo_imovel: tb_val = 1
-                else: out_val = 1
+        res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+        if "Residência" in tipo_imovel: res_val = 1
+        elif "Comércio" in tipo_imovel: com_val = 1
+        elif "Terreno" in tipo_imovel: tb_val = 1
+        else: out_val = 1
 
-                registro_rec = {
-                    "Quarteirao": str(num_quarteirao).strip(),
-                    "Lado": int(lado),
-                    "Residencias": res_val,
-                    "Outros": out_val,
-                    "TB": tb_val,
-                    "Comercio": com_val,
-                    "Total": 1,
-                    "Data": data_visita.strftime("%d/%m/%Y"),
-                    "Semana": int(num_semana),
-                    "Auditor": agente_resp if agente_resp else "Geral",
-                }
-                st.session_state.reconhecimento.append(registro_rec)
-                salvar_estado_local()
-                st.success(f"✅ Imóvel **{num_casa}** salvo com sucesso!")
-                st.rerun()
+        registro_rec = {
+            "Quarteirao": str(num_quarteirao).strip(),
+            "Lado": int(lado),
+            "Residencias": res_val,
+            "Outros": out_val,
+            "TB": tb_val,
+            "Comercio": com_val,
+            "Total": 1,
+            "Data": data_visita.strftime("%d/%m/%Y"),
+            "Semana": int(num_semana),
+            "Auditor": agente_resp if agente_resp else "Geral",
+        }
+        st.session_state.reconhecimento.append(registro_rec)
+        salvar_estado_local()
+        st.success(f"✅ Imóvel **{num_casa}** salvo com sucesso!")
+        st.rerun()
 
-    if st.session_state.vistorias:
-        st.markdown("---")
-        st.subheader("📊 Resumo Operacional Acumulado")
-        df_v = pd.DataFrame(st.session_state.vistorias)
-        m1, m2, m3, m4, m5 = st.columns(5)
-        m1.metric("Total Visitas", len(df_v))
-        m2.metric("Dep. Eliminados", int(df_v["Eliminados"].sum()))
-        m3.metric("Tubitos Coletados", int(df_v["Tubitos"].sum()))
-        m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
-        m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
-
+  if st.session_state.vistorias:
+    st.markdown("---")
+    st.subheader("📊 Resumo Operacional Acumulado")
+    df_v = pd.DataFrame(st.session_state.vistorias)
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Total Visitas", len(df_v))
+    m2.metric("Dep. Eliminados", int(df_v["Eliminados"].sum()))
+    m3.metric("Tubitos Coletados", int(df_v["Tubitos"].sum()))
+    m4.metric("Imóveis Tratados", int(df_v["Tratados"].sum()))
+    m5.metric("Larvicida (g)", f"{df_v['Gramas'].sum():.1f}g")
 
 # ==================== ABA 2: BUSCA AVANÇADA ====================
 with aba_busca:
-    st.subheader("🔍 Busca Avançada e Edição Direta")
-    st.markdown("Use os filtros para encontrar os lançamentos. **As linhas coloridas indicam a situação da vistoria**.")
+    st.subheader("🔍 Busca Avançada e Edição Direta (Estilo Planilha)")
+    st.markdown("Use os filtros para encontrar os lançamentos. **Clique na célula que deseja alterar, digite o novo valor e pressione Enter**. Depois, clique no botão salvar abaixo!")
 
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
@@ -299,21 +261,7 @@ with aba_busca:
             mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
             df_filtrado = df_filtrado[mask]
 
-        st.info(f"Exibindo **{len(df_filtrado)}** registros correspondentes.")
-
-        # Legenda das Cores
-        st.markdown(
-            "**🎨 Legenda de Destaque Visual:** "
-            "🟨 <span style='background-color:#fff3cd; padding:3px 8px; border-radius:4px; color:#856404;'><b>Amarelo:</b> Imóvel Fechado / Recusa</span> &nbsp;&nbsp;|&nbsp;&nbsp; "
-            "🟥 <span style='background-color:#f8d7da; padding:3px 8px; border-radius:4px; color:#721c24;'><b>Vermelho:</b> Tratamento Realizado ou Tubito Coletado</span>",
-            unsafe_allow_html=True
-        )
-
-        # Visualização Colorida
-        st.dataframe(estilar_tabela(df_filtrado), use_container_width=True)
-
-        st.markdown("### ✏️ Editor de Dados (Estilo Planilha)")
-        st.caption("Clique em qualquer célula abaixo para alterar, digite o novo valor e aperte Enter. Em seguida, clique em **Salvar Alterações**.")
+        st.info(f"Exibindo **{len(df_filtrado)}** registros correspondentes. Clique na célula, digite e aperte Enter:")
 
         df_editado = st.data_editor(
             df_filtrado,
@@ -326,7 +274,7 @@ with aba_busca:
         with col_b_salvar:
             if st.button("💾 Salvar Alterações Feitas na Tabela", type="primary", use_container_width=True, key="btn_salvar_tabela_busca"):
                 novos_dados_filtrados = df_editado.to_dict("records")
-
+                
                 if len(df_filtrado) == len(st.session_state.vistorias):
                     st.session_state.vistorias = novos_dados_filtrados
                 else:
@@ -344,7 +292,6 @@ with aba_busca:
     else:
         st.info("Nenhum registro cadastrado.")
 
-
 # ==================== ABA 3: GERENCIAR LANÇAMENTOS ====================
 with aba_gerenciar:
     st.subheader("✏️ Gerenciamento e Edição Inteligente em Massa")
@@ -352,7 +299,7 @@ with aba_gerenciar:
 
     if st.session_state.vistorias:
         st.markdown("### ⚡ Alteração Rápida em Massa (Modificar todos de uma vez)")
-
+        
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
         with col_m1:
             coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"], key="massa_coluna")
@@ -377,7 +324,7 @@ with aba_gerenciar:
                     if atual_str.lower() == val_ant_limpo.lower():
                         item[coluna_alvo] = val_nov_limpo
                         alterados_v += 1
-
+                
                 alterados_r = 0
                 if coluna_alvo in ["Quarteirao", "Data", "Semana"]:
                     for item_r in st.session_state.reconhecimento:
@@ -395,7 +342,7 @@ with aba_gerenciar:
 
         st.markdown("---")
         st.subheader("🔍 Gerenciamento Individual (Editar ou Excluir por Imóvel)")
-
+        
         opcoes_lancamentos = []
         for idx, item in enumerate(st.session_state.vistorias):
             rotulo = f"[{idx}] Data: {item.get('Data')} | Quarteirão: {item.get('Quarteirao')} | Rua: {item.get('Rua')} | Nº: {item.get('Casa')} | Agente: {item.get('Agente')}"
@@ -478,7 +425,6 @@ with aba_gerenciar:
     else:
         st.info("Nenhum lançamento registrado para gerenciar.")
 
-
 # ==================== ABA 4: ANÁLISE DE TRATAMENTOS ====================
 with aba_tratamentos:
     st.subheader("🧪 Painel de Tratamentos e Comparativo entre Quarteirões")
@@ -533,137 +479,129 @@ with aba_tratamentos:
     else:
         st.info("Nenhum lançamento registrado no sistema.")
 
-
 # ==================== ABA 5: IMÓVEIS FECHADOS & RECUSAS ====================
 with aba_fechadas:
-    st.subheader("🚪 Painel de Imóveis Fechados e Recusas")
-    if st.session_state.vistorias:
-        df_v = pd.DataFrame(st.session_state.vistorias)
-        df_fechados = df_v[df_v["Vistoria"].str.contains("Fechada|Recusa", case=False, na=False)]
-        st.metric("Total Fechadas / Recusas", len(df_fechados))
-        st.dataframe(estilar_tabela(df_fechados), use_container_width=True)
-    else:
-        st.info("Sem dados cadastrados.")
-
+  st.subheader("🚪 Painel de Imóveis Fechados e Recusas")
+  if st.session_state.vistorias:
+    df_v = pd.DataFrame(st.session_state.vistorias)
+    df_fechados = df_v[df_v["Vistoria"].str.contains("Fechada", case=False, na=False)]
+    st.metric("Total Fechadas / Recusas", len(df_fechados))
+    st.dataframe(df_fechados, use_container_width=True)
+  else:
+    st.info("Sem dados cadastrados.")
 
 # ==================== ABA 6: RELATÓRIO SEMANAL ====================
 with aba_semanal:
-    st.subheader("📈 Boletim Semanal Consolidado")
-    if st.session_state.vistorias:
-        df_v = pd.DataFrame(st.session_state.vistorias)
-        df_agrupado = df_v.groupby("Semana").agg(
-            Total_Visitas=("Casa", "count"),
-            Eliminados=("Eliminados", "sum"),
-            Tratados=("Tratados", "sum")
-        ).reset_index()
-        st.dataframe(df_agrupado, use_container_width=True)
-    else:
-        st.info("Sem dados cadastrados.")
-
+  st.subheader("📈 Boletim Semanal Consolidado")
+  if st.session_state.vistorias:
+    df_v = pd.DataFrame(st.session_state.vistorias)
+    df_agrupado = df_v.groupby("Semana").agg(Total_Visitas=("Casa", "count"), Eliminados=("Eliminados", "sum"), Tratados=("Tratados", "sum")).reset_index()
+    st.dataframe(df_agrupado, use_container_width=True)
+  else:
+    st.info("Sem dados cadastrados.")
 
 # ==================== ABA 7: CENTRAL DE SEGURANÇA ====================
 with aba_backup:
-    st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
-    col_b1, col_b2 = st.columns(2)
+  st.subheader("🔐 Central de Segurança, Backup e Importação Flexível")
+  col_b1, col_b2 = st.columns(2)
 
-    with col_b1:
-        st.markdown("### 📤 Exportar Dados")
-        salvar_estado_local()
-        if os.path.exists(ARQUIVO_VISTORIAS):
-            with open(ARQUIVO_VISTORIAS, "rb") as f:
-                st.download_button("📥 Baixar vistorias_diarias.csv", data=f, file_name="vistorias_diarias.csv", mime="text/csv", use_container_width=True)
+  with col_b1:
+    st.markdown("### 📤 Exportar Dados")
+    salvar_estado_local()
+    if os.path.exists(ARQUIVO_VISTORIAS):
+      with open(ARQUIVO_VISTORIAS, "rb") as f:
+        st.download_button("📥 Baixar vistorias_diarias.csv", data=f, file_name="vistorias_diarias.csv", mime="text/csv", use_container_width=True)
 
-    with col_b2:
-        st.markdown("### 📥 Importação em Massa")
-        arquivo_upload = st.file_uploader("Enviar arquivo de boletim", type=["csv", "txt", "dat", "xlsx", "xls", "pdf"], key="upload_flexivel_multiformat")
+  with col_b2:
+    st.markdown("### 📥 Importação em Massa")
+    arquivo_upload = st.file_uploader("Enviar arquivo de boletim", type=["csv", "txt", "dat", "xlsx", "xls", "pdf"], key="upload_flexivel_multiformat")
 
-        if arquivo_upload is not None:
-            extensao = arquivo_upload.name.split(".")[-1].lower()
-            df_novo_importado = None
+    if arquivo_upload is not None:
+      extensao = arquivo_upload.name.split(".")[-1].lower()
+      df_novo_importado = None
 
-            try:
-                if extensao in ["csv", "txt", "dat"]:
-                    df_novo_importado = pd.read_csv(arquivo_upload)
-                elif extensao in ["xlsx", "xls"]:
-                    df_novo_importado = pd.read_excel(arquivo_upload)
-                elif extensao == "pdf":
-                    with pdfplumber.open(arquivo_upload) as pdf:
-                        tabelas_extraidas = []
-                        for pagina in pdf.pages:
-                            t = pagina.extract_tables()
-                            if t:
-                                for tabela in t:
-                                    tabelas_extraidas.extend(tabela)
-                        if tabelas_extraidas and len(tabelas_extraidas) > 1:
-                            df_novo_importado = pd.DataFrame(tabelas_extraidas[1:], columns=tabelas_extraidas[0])
+      try:
+        if extensao in ["csv", "txt", "dat"]:
+            df_novo_importado = pd.read_csv(arquivo_upload)
+        elif extensao in ["xlsx", "xls"]:
+            df_novo_importado = pd.read_excel(arquivo_upload)
+        elif extensao == "pdf":
+            with pdfplumber.open(arquivo_upload) as pdf:
+                tabelas_extraidas = []
+                for pagina in pdf.pages:
+                    t = pagina.extract_tables()
+                    if t:
+                        for tabela in t:
+                            tabelas_extraidas.extend(tabela)
+                if tabelas_extraidas and len(tabelas_extraidas) > 1:
+                    df_novo_importado = pd.DataFrame(tabelas_extraidas[1:], columns=tabelas_extraidas[0])
+        
+        if df_novo_importado is not None and not df_novo_importado.empty:
+            st.success("✅ Arquivo lido com sucesso!")
+            st.dataframe(df_novo_importado.head(5), use_container_width=True)
 
-                if df_novo_importado is not None and not df_novo_importado.empty:
-                    st.success("✅ Arquivo lido com sucesso!")
-                    st.dataframe(df_novo_importado.head(5), use_container_width=True)
+            if st.button("🔄 Confirmar e Inserir na Base do Sistema", type="primary", use_container_width=True):
+              registros_novos = df_novo_importado.to_dict("records")
+              for r in registros_novos:
+                reg_formatado = {
+                    "Data": str(r.get("Data", datetime.today().strftime("%d/%m/%Y"))),
+                    "Semana": int(r.get("Semana", 1)),
+                    "Ciclo": str(r.get("Ciclo", "Ciclo 1")),
+                    "Quarteirao": str(r.get("Quarteirao", r.get("Quarteirão", "0"))).strip(),
+                    "Lado": int(r.get("Lado", 1)),
+                    "Rua": str(r.get("Rua", r.get("Logradouro", "Rua Principal"))).strip(),
+                    "Casa": str(r.get("Casa", r.get("Nº Imóvel", r.get("Nº", "0")))).strip(),
+                    "Tipo Imovel": str(r.get("Tipo Imovel", "Residência (RES)")),
+                    "Hora": str(r.get("Hora", "08:00")),
+                    "Vistoria": str(r.get("Vistoria", "Normal")),
+                    "Agente": str(r.get("Agente", "Desconhecido")).strip(),
+                    "Eliminados": int(r.get("Eliminados", 0) if pd.notna(r.get("Eliminados", 0)) else 0),
+                    "Tubitos": int(r.get("Tubitos", 0) if pd.notna(r.get("Tubitos", 0)) else 0),
+                    "Tratados": int(r.get("Tratados", 0) if pd.notna(r.get("Tratados", 0)) else 0),
+                    "Gramas": float(r.get("Gramas", 0.0) if pd.notna(r.get("Gramas", 0.0)) else 0.0),
+                    "Depósitos": int(r.get("Depósitos", 0) if pd.notna(r.get("Depósitos", 0)) else 0),
+                    "Litros": float(r.get("Litros", 0.0) if pd.notna(r.get("Litros", 0.0)) else 0.0),
+                }
+                st.session_state.vistorias.append(reg_formatado)
+                
+                tipo_imovel = reg_formatado["Tipo Imovel"]
+                res_val, com_val, tb_val, out_val = 0, 0, 0, 0
+                if "Residência" in tipo_imovel: res_val = 1
+                elif "Comércio" in tipo_imovel: com_val = 1
+                elif "Terreno" in tipo_imovel: tb_val = 1
+                else: out_val = 1
 
-                    if st.button("🔄 Confirmar e Inserir na Base do Sistema", type="primary", use_container_width=True):
-                        registros_novos = df_novo_importado.to_dict("records")
-                        for r in registros_novos:
-                            reg_formatado = {
-                                "Data": str(r.get("Data", datetime.today().strftime("%d/%m/%Y"))),
-                                "Semana": int(r.get("Semana", 1)),
-                                "Ciclo": str(r.get("Ciclo", "Ciclo 1")),
-                                "Quarteirao": str(r.get("Quarteirao", r.get("Quarteirão", "0"))).strip(),
-                                "Lado": int(r.get("Lado", 1)),
-                                "Rua": str(r.get("Rua", r.get("Logradouro", "Rua Principal"))).strip(),
-                                "Casa": str(r.get("Casa", r.get("Nº Imóvel", r.get("Nº", "0")))).strip(),
-                                "Tipo Imovel": str(r.get("Tipo Imovel", "Residência (RES)")),
-                                "Hora": str(r.get("Hora", "08:00")),
-                                "Vistoria": str(r.get("Vistoria", "Normal")),
-                                "Agente": str(r.get("Agente", "Desconhecido")).strip(),
-                                "Eliminados": int(r.get("Eliminados", 0) if pd.notna(r.get("Eliminados", 0)) else 0),
-                                "Tubitos": int(r.get("Tubitos", 0) if pd.notna(r.get("Tubitos", 0)) else 0),
-                                "Tratados": int(r.get("Tratados", 0) if pd.notna(r.get("Tratados", 0)) else 0),
-                                "Gramas": float(r.get("Gramas", 0.0) if pd.notna(r.get("Gramas", 0.0)) else 0.0),
-                                "Depósitos": int(r.get("Depósitos", 0) if pd.notna(r.get("Depósitos", 0)) else 0),
-                                "Litros": float(r.get("Litros", 0.0) if pd.notna(r.get("Litros", 0.0)) else 0.0),
-                            }
-                            st.session_state.vistorias.append(reg_formatado)
+                st.session_state.reconhecimento.append({
+                    "Quarteirao": reg_formatado["Quarteirao"],
+                    "Lado": reg_formatado["Lado"],
+                    "Residencias": res_val,
+                    "Outros": out_val,
+                    "TB": tb_val,
+                    "Comercio": com_val,
+                    "Total": 1,
+                    "Data": reg_formatado["Data"],
+                    "Semana": reg_formatado["Semana"],
+                    "Auditor": reg_formatado["Agente"],
+                })
 
-                            tipo_imovel = reg_formatado["Tipo Imovel"]
-                            res_val, com_val, tb_val, out_val = 0, 0, 0, 0
-                            if "Residência" in tipo_imovel: res_val = 1
-                            elif "Comércio" in tipo_imovel: com_val = 1
-                            elif "Terreno" in tipo_imovel: tb_val = 1
-                            else: out_val = 1
+              salvar_estado_local()
+              st.success(f"✅ {len(registros_novos)} registros importados com sucesso!")
+              st.rerun()
+      except Exception as e:
+        st.error(f"❌ Erro ao processar o arquivo: {e}")
 
-                            st.session_state.reconhecimento.append({
-                                "Quarteirao": reg_formatado["Quarteirao"],
-                                "Lado": reg_formatado["Lado"],
-                                "Residencias": res_val,
-                                "Outros": out_val,
-                                "TB": tb_val,
-                                "Comercio": com_val,
-                                "Total": 1,
-                                "Data": reg_formatado["Data"],
-                                "Semana": reg_formatado["Semana"],
-                                "Auditor": reg_formatado["Agente"],
-                            })
-
-                        salvar_estado_local()
-                        st.success(f"✅ {len(registros_novos)} registros importados com sucesso!")
-                        st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro ao processar o arquivo: {e}")
-
-    st.markdown("---")
-    confirmar_limpeza = st.checkbox("Confirmo que desejo apagar absolutamente todos os lançamentos.", key="chk_confirmar_limpeza")
-    if st.button("🗑️ Deletar TODOS os Lançamentos do Sistema", type="primary", use_container_width=True):
-        if confirmar_limpeza:
-            st.session_state.vistorias = []
-            st.session_state.reconhecimento = []
-            if os.path.exists(ARQUIVO_VISTORIAS): os.remove(ARQUIVO_VISTORIAS)
-            if os.path.exists(ARQUIVO_RECONHECIMENTO): os.remove(ARQUIVO_RECONHECIMENTO)
-            st.success("🧹 Dados apagados!")
-            st.rerun()
-        else:
-            st.warning("⚠️ Marque a caixa de confirmação acima.")
-
+  st.markdown("---")
+  confirmar_limpeza = st.checkbox("Confirmo que desejo apagar absolutamente todos os lançamentos.", key="chk_confirmar_limpeza")
+  if st.button("🗑️ Deletar TODOS os Lançamentos do Sistema", type="primary", use_container_width=True):
+      if confirmar_limpeza:
+          st.session_state.vistorias = []
+          st.session_state.reconhecimento = []
+          if os.path.exists(ARQUIVO_VISTORIAS): os.remove(ARQUIVO_VISTORIAS)
+          if os.path.exists(ARQUIVO_RECONHECIMENTO): os.remove(ARQUIVO_RECONHECIMENTO)
+          st.success("🧹 Dados apagados!")
+          st.rerun()
+      else:
+          st.warning("⚠️ Marque a caixa de confirmação acima.")
 
 # ==================== ABA 8: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
@@ -694,7 +632,6 @@ with aba_reconhecimento:
             st.warning("⚠️ Nenhum registro encontrado.")
     else:
         st.info("Sem dados de reconhecimento geográfico.")
-
 
 # ==================== ABA 9: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:
@@ -746,15 +683,15 @@ with aba_foto:
                             "contents": [{"parts": [{"text": prompt_extracao}, {"inline_data": {"mime_type": mime_type, "data": image_base64}}]}]
                         }
                         response = requests.post(url, json=payload)
-
+                        
                         if response.status_code == 200:
                             texto_resp = response.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                             if texto_resp.startswith("```json"): texto_resp = texto_resp[7:-3].strip()
                             elif texto_resp.startswith("```"): texto_resp = texto_resp[3:-3].strip()
-
+                            
                             lista_regs = json.loads(texto_resp)
                             df_lido = pd.DataFrame(lista_regs)
-
+                            
                             st.success("✅ Leitura realizada com sucesso abaixo!")
                             st.dataframe(df_lido, use_container_width=True)
 

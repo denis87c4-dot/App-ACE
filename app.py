@@ -71,7 +71,9 @@ def colorir_tabela_vistorias(df):
     return df.style.apply(highlight_rows, axis=1)
 
 def expandir_sequencia_casas(texto_casas):
-    """Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas"""
+    """
+    Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas
+    """
     if not texto_casas:
         return []
     
@@ -361,9 +363,9 @@ with aba_lote:
                 st.success(f"🎉 Sucesso! {total_gerado} imóveis foram gerados e salvos!")
                 st.rerun()
 
-# ==================== ABA 3: BUSCA AVANCADA COM FILTROS DINÂMICOS ====================
+# ==================== ABA 3: BUSCA AVANÇADA COM FILTROS DINÂMICOS ====================
 with aba_busca:
-    st.subheader("🔍 Busca Avançada & Filtros Dinâmicos Poderosos")
+    st.subheader("🔍 Busca Avançada, Filtros Dinâmicos e Edição Direta")
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
         if "Notas" not in df_base.columns:
@@ -373,26 +375,31 @@ with aba_busca:
             if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
                 df_base[col] = df_base[col].astype(str)
 
-        st.markdown("### 🎛️ Painel de Filtros Dinâmicos")
-        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-        
-        with f_col1:
-            lista_qs = sorted(df_base["Quarteirao"].unique().tolist())
-            filtro_q = st.multiselect("Quarteirões", options=lista_qs, key="filtro_q_busca")
-        with f_col2:
-            lista_agentes = sorted(df_base["Agente"].unique().tolist())
-            filtro_a = st.multiselect("Agentes", options=lista_agentes, key="filtro_a_busca")
-        with f_col3:
-            lista_tipos = sorted(df_base["Tipo Imovel"].unique().tolist())
-            filtro_tipo = st.multiselect("Tipos de Imóvel", options=lista_tipos, key="filtro_tipo_busca")
-        with f_col4:
-            lista_vistorias = sorted(df_base["Vistoria"].unique().tolist())
-            filtro_vistoria = st.multiselect("Condições de Vistoria", options=lista_vistorias, key="filtro_vistoria_busca")
+        # 🎛️ PAINEL DE FILTROS DINÂMICOS PODEROSOS
+        with st.expander("🎛️ Filtros Dinâmicos Avançados", expanded=True):
+            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+            
+            with f_col1:
+                lista_qs = sorted(df_base["Quarteirao"].unique().tolist())
+                filtro_q = st.multiselect("Filtrar por Quarteirão", options=lista_qs)
+            
+            with f_col2:
+                lista_agentes = sorted(df_base["Agente"].unique().tolist())
+                filtro_a = st.multiselect("Filtrar por Agente", options=lista_agentes)
+                
+            with f_col3:
+                lista_tipos = sorted(df_base["Tipo Imovel"].unique().tolist())
+                filtro_tipo = st.multiselect("Filtrar por Tipo de Imóvel", options=lista_tipos)
+                
+            with f_col4:
+                lista_vistorias = sorted(df_base["Vistoria"].unique().tolist())
+                filtro_vistoria = st.multiselect("Filtrar por Condição Vistoria", options=lista_vistorias)
 
-        termo = st.text_input("🔎 Pesquisa por termo livre (Rua, Número, Notas...):", placeholder="Ex: Rua São Benedito, Cachorro...")
+        termo = st.text_input("🔎 Pesquisa rápida por termo livre (Rua, Casa, etc.):", placeholder="Ex: Rua São Benedito, 05...")
         
         df_filtrado = df_base.copy()
         
+        # Aplicando os filtros dinâmicos
         if filtro_q:
             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].isin(filtro_q)]
         if filtro_a:
@@ -401,106 +408,48 @@ with aba_busca:
             df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"].isin(filtro_tipo)]
         if filtro_vistoria:
             df_filtrado = df_filtrado[df_filtrado["Vistoria"].isin(filtro_vistoria)]
+            
         if termo:
             mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
             df_filtrado = df_filtrado[mask]
 
-        st.info(f"📊 Exibindo **{len(df_filtrado)}** de **{len(df_base)}** registros totais.")
+        st.info(f"Mostrando {len(df_filtrado)} registros filtrados de um total de {len(df_base)}.")
 
+        # Exibição colorida na busca avançada
         st.dataframe(colorir_tabela_vistorias(df_filtrado), use_container_width=True)
 
-        st.markdown("### ✏️ Edição Direta na Tabela Filtrada")
-        df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca_avancada")
+        df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca")
 
-        if st.button("💾 Salvar Modificações da Tabela", type="primary", use_container_width=True):
-            indices_mantidos = df_editado.index.tolist()
-            df_geral_atual = pd.DataFrame(st.session_state.vistorias)
-            for idx in indices_mantidos:
-                if idx in df_geral_atual.index:
-                    for col in df_editado.columns:
-                        df_geral_atual.loc[idx, col] = df_editado.loc[idx, col]
-            st.session_state.vistorias = df_geral_atual.to_dict("records")
+        if st.button("💾 Salvar Alterações Feitas na Tabela", type="primary", use_container_width=True):
+            # Atualiza apenas os registros modificados de volta no session_state geral
+            st.session_state.vistorias = df_editado.to_dict("records")
             salvar_estado_local()
             st.success("✅ Alterações salvas com sucesso!")
             st.rerun()
     else:
-        st.info("Nenhum registro cadastrado no sistema.")
+        st.info("Nenhum registro cadastrado.")
 
-# ==================== ABA 4: GERENCIAR LANÇAMENTOS (COM SELEÇÃO POR CHECKBOX) ====================
+# ==================== ABA 4: GERENCIAR LANÇAMENTOS ====================
 with aba_gerenciar:
-    st.subheader("✏️ Gerenciamento e Seleção de Lançamentos por Checkbox")
+    st.subheader("✏️ Gerenciamento e Edição Inteligente em Massa")
     if st.session_state.vistorias:
-        df_gerencia = pd.DataFrame(st.session_state.vistorias)
-        
-        # Adiciona a coluna de seleção interativa com checkbox na tabela
-        df_gerencia.insert(0, "Selecionar", False)
-        
-        st.markdown("💡 **Dica:** Marque a caixinha (**Selecionar**) nos registros desejados na tabela abaixo e escolha a ação logo em seguida.")
-        
-        # Exibe a tabela interativa para marcar as linhas
-        df_selecao_editada = st.data_editor(
-            df_gerencia,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Selecionar": st.column_config.CheckboxColumn(
-                    "Selecionar",
-                    help="Marque para selecionar este lançamento",
-                    default=False,
-                )
-            },
-            key="tabela_gerenciar_checkbox"
-        )
-        
-        # Filtra apenas as linhas onde a coluna 'Selecionar' está marcada como True
-        linhas_selecionadas = df_selecao_editada[df_selecao_editada["Selecionar"] == True]
-        
-        st.markdown("---")
-        st.markdown(f"📌 **Registros selecionados no momento:** `{len(linhas_selecionadas)}`")
-        
-        if len(linhas_selecionadas) > 0:
-            st.markdown("### ⚡ Ações em Lote para os Itens Marcados")
-            
-            col_acao1, col_acao2 = st.columns(2)
-            
-            with col_acao1:
-                st.markdown("#### 🔄 Alterar Atributo dos Selecionados")
-                coluna_atribuicao = st.selectbox("Atributo a alterar", ["Agente", "Ciclo", "Semana", "Quarteirao", "Tipo Imovel", "Vistoria"], key="col_atrib_sel")
-                novo_valor_atribuicao = st.text_input("Novo valor para os itens marcados", placeholder="Ex: Novo Agente", key="val_atrib_sel")
-                
-                if st.button("🚀 Aplicar Alteração nos Selecionados", type="primary"):
-                    indices_para_mudar = linhas_selecionadas.index.tolist()
-                    for idx in indices_para_mudar:
-                        if idx < len(st.session_state.vistorias):
-                            st.session_state.vistorias[idx][coluna_atribuicao] = novo_valor_atribuicao.strip()
-                    salvar_estado_local()
-                    st.success(f"✅ {len(indices_para_mudar)} registros atualizados com sucesso!")
-                    st.rerun()
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        with col_m1: coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"])
+        with col_m2: valor_antigo = st.text_input("Valor antigo")
+        with col_m3: valor_novo = st.text_input("Novo valor")
+        with col_m4:
+            st.markdown("<br>", unsafe_allow_html=True)
+            btn_aplicar_massa = st.button("🚀 Aplicar em Massa", type="primary", use_container_width=True)
 
-            with col_acao2:
-                st.markdown("#### 🗑️ Excluir os Selecionados")
-                st.warning("Atenção: Esta ação removerá permanentemente os registros marcados.")
-                if st.button("🗑️ Deletar Registros Marcados", type="secondary"):
-                    indices_para_remover = set(linhas_selecionadas.index.tolist())
-                    # Filtra mantendo apenas os índices que NÃO foram marcados para remoção
-                    st.session_state.vistorias = [
-                        item for i, item in enumerate(st.session_state.vistorias) if i not in indices_para_remover
-                    ]
-                    salvar_estado_local()
-                    st.success(f"🗑️ {len(indices_para_remover)} registros foram removidos com sucesso!")
-                    st.rerun()
-        else:
-            st.info("ℹ️ Nenhuma linha marcada na tabela acima. Selecione ao menos uma caixinha para habilitar as opções de edição/exclusão em lote.")
-
-        st.markdown("---")
-        st.markdown("### 🗑️ Exclusão Seletiva em Massa por Quarteirão Inteiro")
-        q_para_apagar = st.selectbox("Selecione um Quarteirão para apagar todos os seus registros", options=[""] + sorted(df_gerencia["Quarteirao"].unique().tolist()))
-        if q_para_apagar:
-            if st.button(f"🗑️ Deletar todos os dados do Quarteirão {q_para_apagar}", type="secondary"):
-                st.session_state.vistorias = [v for v in st.session_state.vistorias if str(v.get("Quarteirao")) != str(q_para_apagar)]
-                salvar_estado_local()
-                st.success(f"🗑️ Registros do Quarteirão {q_para_apagar} removidos!")
-                st.rerun()
+        if btn_aplicar_massa and valor_antigo:
+            alterados = 0
+            for item in st.session_state.vistorias:
+                if str(item.get(coluna_alvo, "")).strip().lower() == valor_antigo.strip().lower():
+                    item[coluna_alvo] = valor_novo.strip()
+                    alterados += 1
+            salvar_estado_local()
+            st.success(f"✅ {alterados} registros atualizados em massa!")
+            st.rerun()
     else:
         st.info("Nenhum lançamento registrado.")
 
@@ -515,9 +464,6 @@ with aba_tratamentos:
         tm1, tm2 = st.columns(2)
         tm1.metric("🏠 Imóveis Tratados", tot_tratados)
         tm2.metric("⚖️ Larvicida Aplicado (g)", f"{tot_gramas:.1f}g")
-        
-        st.markdown("---")
-        st.dataframe(colorir_tabela_vistorias(df_trat[df_trat["Tratados"] > 0]), use_container_width=True)
     else:
         st.info("Nenhum lançamento registrado.")
 
@@ -597,69 +543,12 @@ with aba_backup:
 
 # ==================== ABA 9: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
-    st.subheader("📊 Reconhecimento Geográfico Consolidado por Quarteirão")
-    
-    if st.session_state.vistorias:
-        df_base_rec = pd.DataFrame(st.session_state.vistorias)
-        
-        # Mapeamento e contagem categorizada por tipo de imóvel e condição de vistoria
-        df_base_rec["Residencias"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Residência" in str(x) else 0)
-        df_base_rec["Comercio"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Comércio" in str(x) else 0)
-        df_base_rec["TB"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Terreno" in str(x) else 0)
-        df_base_rec["PE"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Ponto" in str(x) else 0)
-        df_base_rec["Outros"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if ("Outros" in str(x) or not any(t in str(x) for t in ["Residência", "Comércio", "Terreno", "Ponto"])) else 0)
-        
-        df_base_rec["Fechadas_Recusas"] = df_base_rec["Vistoria"].apply(lambda x: 1 if "Fechada" in str(x) else 0)
-        df_base_rec["Total_Visitas"] = 1
-
-        # Agrupamento e somatório consolidado por Quarteirão
-        df_consolidado = df_base_rec.groupby("Quarteirao").agg(
-            Total_Imoveis=("Total_Visitas", "sum"),
-            Residencias=("Residencias", "sum"),
-            Comercio=("Comercio", "sum"),
-            Terrenos_Baldios=("TB", "sum"),
-            Pontos_Estrategicos=("PE", "sum"),
-            Outros=("Outros", "sum"),
-            Imoveis_Fechados_Recusas=("Fechadas_Recusas", "sum"),
-            Total_Tratados=("Tratados", "sum")
-        ).reset_index()
-
-        st.markdown("### 📋 Tabela Resumo Consolidada")
-        st.dataframe(df_consolidado, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-        st.markdown("### 📈 Visualização Gráfica por Quarteirão")
-        
-        df_melted = df_consolidado.melt(
-            id_vars=["Quarteirao"], 
-            value_vars=["Residencias", "Comercio", "Terrenos_Baldios", "Pontos_Estrategicos", "Outros"],
-            var_name="Tipo de Imóvel", 
-            value_name="Quantidade"
-        )
-        
-        chart = alt.Chart(df_melted).mark_bar().encode(
-            x=alt.X("Quarteirao:N", title="Quarteirão"),
-            y=alt.Y("Quantidade:Q", title="Total de Imóveis"),
-            color=alt.Color("Tipo de Imóvel:N", title="Categoria"),
-            tooltip=["Quarteirao", "Tipo de Imóvel", "Quantidade"]
-        ).properties(
-            height=400
-        ).interactive()
-        
-        st.altair_chart(chart, use_container_width=True)
-
-    elif st.session_state.reconhecimento:
+    st.subheader("📊 Reconhecimento Geográfico")
+    if st.session_state.reconhecimento:
         df_rec = pd.DataFrame(st.session_state.reconhecimento)
-        df_rec_agg = df_rec.groupby("Quarteirao").agg(
-            Residencias=("Residencias", "sum"),
-            Comercio=("Comercio", "sum"),
-            TB=("TB", "sum"),
-            Outros=("Outros", "sum"),
-            Total=("Total", "sum")
-        ).reset_index()
-        st.dataframe(df_rec_agg, use_container_width=True, hide_index=True)
+        st.dataframe(df_rec, use_container_width=True)
     else:
-        st.info("⚠️ Nenhum dado registrado no sistema para gerar o reconhecimento geográfico.")
+        st.info("Sem dados de reconhecimento geográfico.")
 
 # ==================== ABA 10: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:

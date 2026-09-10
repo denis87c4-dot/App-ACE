@@ -363,9 +363,9 @@ with aba_lote:
                 st.success(f"🎉 Sucesso! {total_gerado} imóveis foram gerados e salvos!")
                 st.rerun()
 
-# ==================== ABA 3: BUSCA AVANÇADA ====================
+# ==================== ABA 3: BUSCA AVANÇADA COM FILTROS DINÂMICOS ====================
 with aba_busca:
-    st.subheader("🔍 Busca Avançada e Edição Direta")
+    st.subheader("🔍 Busca Avançada, Filtros Dinâmicos e Edição Direta")
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
         if "Notas" not in df_base.columns:
@@ -375,11 +375,45 @@ with aba_busca:
             if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
                 df_base[col] = df_base[col].astype(str)
 
-        termo = st.text_input("🔎 Pesquisa rápida por termo:", placeholder="Ex: 56, Rua...")
+        # 🎛️ PAINEL DE FILTROS DINÂMICOS PODEROSOS
+        with st.expander("🎛️ Filtros Dinâmicos Avançados", expanded=True):
+            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+            
+            with f_col1:
+                lista_qs = sorted(df_base["Quarteirao"].unique().tolist())
+                filtro_q = st.multiselect("Filtrar por Quarteirão", options=lista_qs)
+            
+            with f_col2:
+                lista_agentes = sorted(df_base["Agente"].unique().tolist())
+                filtro_a = st.multiselect("Filtrar por Agente", options=lista_agentes)
+                
+            with f_col3:
+                lista_tipos = sorted(df_base["Tipo Imovel"].unique().tolist())
+                filtro_tipo = st.multiselect("Filtrar por Tipo de Imóvel", options=lista_tipos)
+                
+            with f_col4:
+                lista_vistorias = sorted(df_base["Vistoria"].unique().tolist())
+                filtro_vistoria = st.multiselect("Filtrar por Condição Vistoria", options=lista_vistorias)
+
+        termo = st.text_input("🔎 Pesquisa rápida por termo livre (Rua, Casa, etc.):", placeholder="Ex: Rua São Benedito, 05...")
+        
         df_filtrado = df_base.copy()
+        
+        # Aplicando os filtros dinâmicos
+        if filtro_q:
+            df_filtrado = df_filtrado[df_filtrado["Quarteirao"].isin(filtro_q)]
+        if filtro_a:
+            df_filtrado = df_filtrado[df_filtrado["Agente"].isin(filtro_a)]
+        if filtro_tipo:
+            df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"].isin(filtro_tipo)]
+        if filtro_vistoria:
+            df_filtrado = df_filtrado[df_filtrado["Vistoria"].isin(filtro_vistoria)]
+            
         if termo:
             mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
             df_filtrado = df_filtrado[mask]
+
+        st.info(f"Mostrando {len(df_filtrado)} registros filtrados de um total de {len(df_base)}.")
 
         # Exibição colorida na busca avançada
         st.dataframe(colorir_tabela_vistorias(df_filtrado), use_container_width=True)
@@ -387,6 +421,7 @@ with aba_busca:
         df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca")
 
         if st.button("💾 Salvar Alterações Feitas na Tabela", type="primary", use_container_width=True):
+            # Atualiza apenas os registros modificados de volta no session_state geral
             st.session_state.vistorias = df_editado.to_dict("records")
             salvar_estado_local()
             st.success("✅ Alterações salvas com sucesso!")

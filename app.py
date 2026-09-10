@@ -597,12 +597,69 @@ with aba_backup:
 
 # ==================== ABA 9: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
-    st.subheader("📊 Reconhecimento Geográfico")
-    if st.session_state.reconhecimento:
+    st.subheader("📊 Reconhecimento Geográfico Consolidado por Quarteirão")
+    
+    if st.session_state.vistorias:
+        df_base_rec = pd.DataFrame(st.session_state.vistorias)
+        
+        # Mapeamento e contagem categorizada por tipo de imóvel e condição de vistoria
+        df_base_rec["Residencias"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Residência" in str(x) else 0)
+        df_base_rec["Comercio"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Comércio" in str(x) else 0)
+        df_base_rec["TB"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Terreno" in str(x) else 0)
+        df_base_rec["PE"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if "Ponto" in str(x) else 0)
+        df_base_rec["Outros"] = df_base_rec["Tipo Imovel"].apply(lambda x: 1 if ("Outros" in str(x) or not any(t in str(x) for t in ["Residência", "Comércio", "Terreno", "Ponto"])) else 0)
+        
+        df_base_rec["Fechadas_Recusas"] = df_base_rec["Vistoria"].apply(lambda x: 1 if "Fechada" in str(x) else 0)
+        df_base_rec["Total_Visitas"] = 1
+
+        # Agrupamento e somatório consolidado por Quarteirão
+        df_consolidado = df_base_rec.groupby("Quarteirao").agg(
+            Total_Imoveis=("Total_Visitas", "sum"),
+            Residencias=("Residencias", "sum"),
+            Comercio=("Comercio", "sum"),
+            Terrenos_Baldios=("TB", "sum"),
+            Pontos_Estrategicos=("PE", "sum"),
+            Outros=("Outros", "sum"),
+            Imoveis_Fechados_Recusas=("Fechadas_Recusas", "sum"),
+            Total_Tratados=("Tratados", "sum")
+        ).reset_index()
+
+        st.markdown("### 📋 Tabela Resumo Consolidada")
+        st.dataframe(df_consolidado, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### 📈 Visualização Gráfica por Quarteirão")
+        
+        df_melted = df_consolidado.melt(
+            id_vars=["Quarteirao"], 
+            value_vars=["Residencias", "Comercio", "Terrenos_Baldios", "Pontos_Estrategicos", "Outros"],
+            var_name="Tipo de Imóvel", 
+            value_name="Quantidade"
+        )
+        
+        chart = alt.Chart(df_melted).mark_bar().encode(
+            x=alt.X("Quarteirao:N", title="Quarteirão"),
+            y=alt.Y("Quantidade:Q", title="Total de Imóveis"),
+            color=alt.Color("Tipo de Imóvel:N", title="Categoria"),
+            tooltip=["Quarteirao", "Tipo de Imóvel", "Quantidade"]
+        ).properties(
+            height=400
+        ).interactive()
+        
+        st.altair_chart(chart, use_container_width=True)
+
+    elif st.session_state.reconhecimento:
         df_rec = pd.DataFrame(st.session_state.reconhecimento)
-        st.dataframe(df_rec, use_container_width=True)
+        df_rec_agg = df_rec.groupby("Quarteirao").agg(
+            Residencias=("Residencias", "sum"),
+            Comercio=("Comercio", "sum"),
+            TB=("TB", "sum"),
+            Outros=("Outros", "sum"),
+            Total=("Total", "sum")
+        ).reset_index()
+        st.dataframe(df_rec_agg, use_container_width=True, hide_index=True)
     else:
-        st.info("Sem dados de reconhecimento geográfico.")
+        st.info("⚠️ Nenhum dado registrado no sistema para gerar o reconhecimento geográfico.")
 
 # ==================== ABA 10: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:

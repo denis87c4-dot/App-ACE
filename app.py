@@ -42,17 +42,45 @@ if "reconhecimento" not in st.session_state:
         st.session_state.reconhecimento = []
 
 def salvar_estado_local():
-    """Função auxiliar para salvar os dados instantaneamente no disco local"""
+    """Função auxiliar para salvar os dados instantaneamente no disco local e recalcular reconhecimento"""
     try:
         if st.session_state.vistorias:
-            pd.DataFrame(st.session_state.vistorias).to_csv(ARQUIVO_VISTORIAS, index=False)
-        elif os.path.exists(ARQUIVO_VISTORIAS):
-            os.remove(ARQUIVO_VISTORIAS)
+            df_v_temp = pd.DataFrame(st.session_state.vistorias)
+            df_v_temp.to_csv(ARQUIVO_VISTORIAS, index=False)
             
-        if st.session_state.reconhecimento:
+            # RECONSTRUÇÃO AUTOMÁTICA E SOMA DO RECONHECIMENTO GEOGRÁFICO
+            lista_rec_cons = []
+            # Agrupando por Quarteirão e Lado para somar corretamente todas as ocorrências
+            grupos = df_v_temp.groupby(["Quarteirao", "Lado"])
+            for (q_val, l_val), grupo in grupos:
+                res_val = int(grupo["Tipo Imovel"].str.contains("Residência", case=False, na=False).sum())
+                com_val = int(grupo["Tipo Imovel"].str.contains("Comércio", case=False, na=False).sum())
+                tb_val = int(grupo["Tipo Imovel"].str.contains("Terreno", case=False, na=False).sum())
+                out_val = int(grupo["Tipo Imovel"].str.contains("Outros|Ponto", case=False, na=False).sum())
+                total_imoveis = len(grupo)
+                
+                primeira_linha = grupo.iloc[0]
+                lista_rec_cons.append({
+                    "Quarteirao": str(q_val),
+                    "Lado": int(l_val),
+                    "Residencias": res_val,
+                    "Outros": out_val,
+                    "TB": tb_val,
+                    "Comercio": com_val,
+                    "Total": total_imoveis,
+                    "Data": primeira_linha.get("Data", datetime.today().strftime("%d/%m/%Y")),
+                    "Semana": int(primeira_linha.get("Semana", 1)),
+                    "Auditor": str(primeira_linha.get("Agente", "Geral"))
+                })
+            st.session_state.reconhecimento = lista_rec_cons
             pd.DataFrame(st.session_state.reconhecimento).to_csv(ARQUIVO_RECONHECIMENTO, index=False)
-        elif os.path.exists(ARQUIVO_RECONHECIMENTO):
-            os.remove(ARQUIVO_RECONHECIMENTO)
+            
+        else:
+            if os.path.exists(ARQUIVO_VISTORIAS):
+                os.remove(ARQUIVO_VISTORIAS)
+            if os.path.exists(ARQUIVO_RECONHECIMENTO):
+                os.remove(ARQUIVO_RECONHECIMENTO)
+            st.session_state.reconhecimento = []
     except Exception as e:
         st.error(f"Erro ao salvar dados localmente: {e}")
 
@@ -71,9 +99,7 @@ def colorir_tabela_vistorias(df):
     return df.style.apply(highlight_rows, axis=1)
 
 def expandir_sequencia_casas(texto_casas):
-    """
-    Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas
-    """
+    """Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas"""
     if not texto_casas:
         return []
     
@@ -210,26 +236,6 @@ with aba_cadastro:
                     "Notas": str(notas_imovel).strip(),
                 }
                 st.session_state.vistorias.append(novo_registro)
-
-                res_val, com_val, tb_val, out_val = 0, 0, 0, 0
-                if "Residência" in tipo_imovel: res_val = 1
-                elif "Comércio" in tipo_imovel: com_val = 1
-                elif "Terreno" in tipo_imovel: tb_val = 1
-                else: out_val = 1
-
-                registro_rec = {
-                    "Quarteirao": str(num_quarteirao).strip(),
-                    "Lado": int(lado),
-                    "Residencias": res_val,
-                    "Outros": out_val,
-                    "TB": tb_val,
-                    "Comercio": com_val,
-                    "Total": 1,
-                    "Data": data_visita.strftime("%d/%m/%Y"),
-                    "Semana": int(num_semana),
-                    "Auditor": agente_resp if agente_resp else "Geral",
-                }
-                st.session_state.reconhecimento.append(registro_rec)
                 salvar_estado_local()
                 st.success(f"✅ Imóvel **{num_casa}** salvo com sucesso!")
                 st.rerun()
@@ -316,25 +322,6 @@ with aba_lote:
                     st.session_state.vistorias.append(novo_reg)
                     total_gerado += 1
 
-                    res_val, com_val, tb_val, out_val = 0, 0, 0, 0
-                    if "Residência" in lote_tipo_padrao: res_val = 1
-                    elif "Comércio" in lote_tipo_padrao: com_val = 1
-                    elif "Terreno" in lote_tipo_padrao: tb_val = 1
-                    else: out_val = 1
-
-                    st.session_state.reconhecimento.append({
-                        "Quarteirao": str(lote_quarteirao).strip(),
-                        "Lado": int(lote_lado),
-                        "Residencias": res_val,
-                        "Outros": out_val,
-                        "TB": tb_val,
-                        "Comercio": com_val,
-                        "Total": 1,
-                        "Data": data_str,
-                        "Semana": int(lote_semana),
-                        "Auditor": lote_agente,
-                    })
-
                 for casa in lista_fechadas:
                     novo_reg = {
                         "Data": data_str,
@@ -375,22 +362,17 @@ with aba_busca:
             if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
                 df_base[col] = df_base[col].astype(str)
 
-        # 🎛️ PAINEL DE FILTROS DINÂMICOS PODEROSOS
         with st.expander("🎛️ Filtros Dinâmicos Avançados", expanded=True):
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            
             with f_col1:
                 lista_qs = sorted(df_base["Quarteirao"].unique().tolist())
                 filtro_q = st.multiselect("Filtrar por Quarteirão", options=lista_qs)
-            
             with f_col2:
                 lista_agentes = sorted(df_base["Agente"].unique().tolist())
                 filtro_a = st.multiselect("Filtrar por Agente", options=lista_agentes)
-                
             with f_col3:
                 lista_tipos = sorted(df_base["Tipo Imovel"].unique().tolist())
                 filtro_tipo = st.multiselect("Filtrar por Tipo de Imóvel", options=lista_tipos)
-                
             with f_col4:
                 lista_vistorias = sorted(df_base["Vistoria"].unique().tolist())
                 filtro_vistoria = st.multiselect("Filtrar por Condição Vistoria", options=lista_vistorias)
@@ -398,8 +380,6 @@ with aba_busca:
         termo = st.text_input("🔎 Pesquisa rápida por termo livre (Rua, Casa, etc.):", placeholder="Ex: Rua São Benedito, 05...")
         
         df_filtrado = df_base.copy()
-        
-        # Aplicando os filtros dinâmicos
         if filtro_q:
             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].isin(filtro_q)]
         if filtro_a:
@@ -414,14 +394,11 @@ with aba_busca:
             df_filtrado = df_filtrado[mask]
 
         st.info(f"Mostrando {len(df_filtrado)} registros filtrados de um total de {len(df_base)}.")
-
-        # Exibição colorida na busca avançada
         st.dataframe(colorir_tabela_vistorias(df_filtrado), use_container_width=True)
 
         df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca")
 
         if st.button("💾 Salvar Alterações Feitas na Tabela", type="primary", use_container_width=True):
-            # Atualiza apenas os registros modificados de volta no session_state geral
             st.session_state.vistorias = df_editado.to_dict("records")
             salvar_estado_local()
             st.success("✅ Alterações salvas com sucesso!")
@@ -467,13 +444,47 @@ with aba_tratamentos:
     else:
         st.info("Nenhum lançamento registrado.")
 
-# ==================== ABA 6: IMÓVEIS FECHADOS & RECUSAS ====================
+# ==================== ABA 6: IMÓVEIS FECHADOS & RECUSAS (COM EDIÇÃO RÁPIDA) ====================
 with aba_fechadas:
-    st.subheader("🚪 Imóveis Fechados e Recusas")
+    st.subheader("🚪 Imóveis Fechados e Recusas (Recuperação Rápida)")
     if st.session_state.vistorias:
         df_v = pd.DataFrame(st.session_state.vistorias)
         df_fechados = df_v[df_v["Vistoria"].str.contains("Fechada", case=False, na=False)]
-        st.metric("Total Fechadas / Recusas", len(df_fechados))
+        
+        st.metric("Total Fechadas / Recusas Pendentes", len(df_fechados))
+        
+        if not df_fechados.empty:
+            st.markdown("### 🔄 Recuperar Imóvel Fechado Instantaneamente")
+            st.info("Se encontrou um morador e realizou a vistoria em um imóvel que estava fechado, selecione-o abaixo para mudar o status para **Recuperada** ou **Normal** sem precisar procurar na lista geral:")
+            
+            # Criando uma lista legível para o selectbox
+            df_fechados["Opcao_Display"] = df_fechados.apply(lambda r: f"Quarteirão: {r['Quarteirao']} | Rua: {r['Rua']} | Nº: {r['Casa']} (Lado {r['Lado']})", axis=1)
+            
+            imovel_escolhido = st.selectbox("Selecione o Imóvel Fechado para Atualizar", options=df_fechados["Opcao_Display"].tolist())
+            
+            if imovel_escolhido:
+                idx_original = df_fechados[df_fechados["Opcao_Display"] == imovel_escolhido].index[0]
+                
+                col_up1, col_up2, col_up3 = st.columns(3)
+                with col_up1:
+                    novo_status_vistoria = st.selectbox("Novo Status da Vistoria", ["Recuperada", "Normal", "Fechada / Recusa"])
+                with col_up2:
+                    qtd_tratados_rec = st.number_input("Tratados?", min_value=0, value=0)
+                with col_up3:
+                    qtd_gramas_rec = st.number_input("Gramas (g)?", min_value=0.0, format="%.1f", value=0.0)
+                
+                if st.button("✅ Atualizar Status deste Imóvel Agora", type="primary", use_container_width=True):
+                    st.session_state.vistorias[idx_original]["Vistoria"] = novo_status_vistoria
+                    st.session_state.vistorias[idx_original]["Tratados"] = int(qtd_tratados_rec)
+                    st.session_state.vistorias[idx_original]["Gramas"] = float(qtd_gramas_rec)
+                    if qtd_tratados_rec > 0:
+                        st.session_state.vistorias[idx_original]["Eliminados"] = 1
+                    
+                    salvar_estado_local()
+                    st.success(f"🎉 Imóvel atualizado com sucesso para '{novo_status_vistoria}'!")
+                    st.rerun()
+
+        st.markdown("---")
         st.dataframe(colorir_tabela_vistorias(df_fechados), use_container_width=True)
     else:
         st.info("Sem dados cadastrados.")
@@ -543,12 +554,13 @@ with aba_backup:
 
 # ==================== ABA 9: RECONHECIMENTO GEOGRÁFICO ====================
 with aba_reconhecimento:
-    st.subheader("📊 Reconhecimento Geográfico")
+    st.subheader("📊 Reconhecimento Geográfico Consolidado")
+    salvar_estado_local() # Garante atualização imediata
     if st.session_state.reconhecimento:
         df_rec = pd.DataFrame(st.session_state.reconhecimento)
         st.dataframe(df_rec, use_container_width=True)
     else:
-        st.info("Sem dados de reconhecimento geográfico.")
+        st.info("Sem dados de reconhecimento geográfico acumulados.")
 
 # ==================== ABA 10: LEITURA INTELIGENTE POR FOTO ====================
 with aba_foto:

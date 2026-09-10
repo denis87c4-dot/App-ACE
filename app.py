@@ -71,9 +71,7 @@ def colorir_tabela_vistorias(df):
     return df.style.apply(highlight_rows, axis=1)
 
 def expandir_sequencia_casas(texto_casas):
-    """
-    Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas
-    """
+    """Converte entradas como '10, 12, 15 a 20, 22' em uma lista de strings limpas"""
     if not texto_casas:
         return []
     
@@ -363,9 +361,9 @@ with aba_lote:
                 st.success(f"🎉 Sucesso! {total_gerado} imóveis foram gerados e salvos!")
                 st.rerun()
 
-# ==================== ABA 3: BUSCA AVANÇADA COM FILTROS DINÂMICOS ====================
+# ==================== ABA 3: BUSCA AVANCADA COM FILTROS DINÂMICOS PODEROSOS ====================
 with aba_busca:
-    st.subheader("🔍 Busca Avançada, Filtros Dinâmicos e Edição Direta")
+    st.subheader("🔍 Busca Avançada & Filtros Dinâmicos Poderosos")
     if st.session_state.vistorias:
         df_base = pd.DataFrame(st.session_state.vistorias)
         if "Notas" not in df_base.columns:
@@ -375,31 +373,28 @@ with aba_busca:
             if col not in ["Semana", "Lado", "Eliminados", "Tubitos", "Tratados", "Gramas", "Depósitos", "Litros"]:
                 df_base[col] = df_base[col].astype(str)
 
-        # 🎛️ PAINEL DE FILTROS DINÂMICOS PODEROSOS
-        with st.expander("🎛️ Filtros Dinâmicos Avançados", expanded=True):
-            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            
-            with f_col1:
-                lista_qs = sorted(df_base["Quarteirao"].unique().tolist())
-                filtro_q = st.multiselect("Filtrar por Quarteirão", options=lista_qs)
-            
-            with f_col2:
-                lista_agentes = sorted(df_base["Agente"].unique().tolist())
-                filtro_a = st.multiselect("Filtrar por Agente", options=lista_agentes)
-                
-            with f_col3:
-                lista_tipos = sorted(df_base["Tipo Imovel"].unique().tolist())
-                filtro_tipo = st.multiselect("Filtrar por Tipo de Imóvel", options=lista_tipos)
-                
-            with f_col4:
-                lista_vistorias = sorted(df_base["Vistoria"].unique().tolist())
-                filtro_vistoria = st.multiselect("Filtrar por Condição Vistoria", options=lista_vistorias)
+        # 🎛️ PAINEL MULTI-FILTROS DINÂMICOS
+        st.markdown("### 🎛️ Painel de Filtros Dinâmicos")
+        f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+        
+        with f_col1:
+            lista_qs = sorted(df_base["Quarteirao"].unique().tolist())
+            filtro_q = st.multiselect("Quarteirões", options=lista_qs, key="filtro_q_busca")
+        with f_col2:
+            lista_agentes = sorted(df_base["Agente"].unique().tolist())
+            filtro_a = st.multiselect("Agentes", options=lista_agentes, key="filtro_a_busca")
+        with f_col3:
+            lista_tipos = sorted(df_base["Tipo Imovel"].unique().tolist())
+            filtro_tipo = st.multiselect("Tipos de Imóvel", options=lista_tipos, key="filtro_tipo_busca")
+        with f_col4:
+            lista_vistorias = sorted(df_base["Vistoria"].unique().tolist())
+            filtro_vistoria = st.multiselect("Condições de Vistoria", options=lista_vistorias, key="filtro_vistoria_busca")
 
-        termo = st.text_input("🔎 Pesquisa rápida por termo livre (Rua, Casa, etc.):", placeholder="Ex: Rua São Benedito, 05...")
+        termo = st.text_input("🔎 Pesquisa por termo livre (Rua, Número, Notas...):", placeholder="Ex: Rua São Benedito, Cachorro...")
         
         df_filtrado = df_base.copy()
         
-        # Aplicando os filtros dinâmicos
+        # Aplicando filtros dinâmicos
         if filtro_q:
             df_filtrado = df_filtrado[df_filtrado["Quarteirao"].isin(filtro_q)]
         if filtro_a:
@@ -408,48 +403,72 @@ with aba_busca:
             df_filtrado = df_filtrado[df_filtrado["Tipo Imovel"].isin(filtro_tipo)]
         if filtro_vistoria:
             df_filtrado = df_filtrado[df_filtrado["Vistoria"].isin(filtro_vistoria)]
-            
         if termo:
             mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(termo, case=False, na=False)).any(axis=1)
             df_filtrado = df_filtrado[mask]
 
-        st.info(f"Mostrando {len(df_filtrado)} registros filtrados de um total de {len(df_base)}.")
+        st.info(f"📊 Exibindo **{len(df_filtrado)}** de **{len(df_base)}** registros totais.")
 
-        # Exibição colorida na busca avançada
+        # Exibição colorida
         st.dataframe(colorir_tabela_vistorias(df_filtrado), use_container_width=True)
 
-        df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca")
+        st.markdown("### ✏️ Edição Direta na Tabela Filtrada")
+        df_editado = st.data_editor(df_filtrado, use_container_width=True, num_rows="dynamic", key="editor_busca_avancada")
 
-        if st.button("💾 Salvar Alterações Feitas na Tabela", type="primary", use_container_width=True):
-            # Atualiza apenas os registros modificados de volta no session_state geral
-            st.session_state.vistorias = df_editado.to_dict("records")
+        if st.button("💾 Salvar Modificações da Tabela", type="primary", use_container_width=True):
+            # Substitui ou atualiza no session_state preservando registros não filtrados
+            indices_mantidos = df_editado.index.tolist()
+            df_geral_atual = pd.DataFrame(st.session_state.vistorias)
+            # Atualiza o subset editado
+            for idx in indices_mantidos:
+                if idx in df_geral_atual.index:
+                    for col in df_editado.columns:
+                        df_geral_atual.loc[idx, col] = df_editado.loc[idx, col]
+            st.session_state.vistorias = df_geral_atual.to_dict("records")
             salvar_estado_local()
             st.success("✅ Alterações salvas com sucesso!")
             st.rerun()
     else:
-        st.info("Nenhum registro cadastrado.")
+        st.info("Nenhum registro cadastrado no sistema.")
 
-# ==================== ABA 4: GERENCIAR LANÇAMENTOS ====================
+# ==================== ABA 4: GERENCIAR LANÇAMENTOS (EDIÇÃO EM MASSA PODEROSA) ====================
 with aba_gerenciar:
-    st.subheader("✏️ Gerenciamento e Edição Inteligente em Massa")
+    st.subheader("✏️ Gerenciamento e Edição em Massa Avançada")
     if st.session_state.vistorias:
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        with col_m1: coluna_alvo = st.selectbox("Coluna para alterar", ["Quarteirao", "Semana", "Ciclo", "Agente", "Rua", "Data"])
-        with col_m2: valor_antigo = st.text_input("Valor antigo")
-        with col_m3: valor_novo = st.text_input("Novo valor")
-        with col_m4:
-            st.markdown("<br>", unsafe_allow_html=True)
-            btn_aplicar_massa = st.button("🚀 Aplicar em Massa", type="primary", use_container_width=True)
+        df_gerencia = pd.DataFrame(st.session_state.vistorias)
+        
+        st.markdown("Use as opções abaixo para alterar dados em massa de forma inteligente com base em critérios de filtro.")
+        
+        col_em1, col_em2, col_em3 = st.columns(3)
+        with col_em1:
+            coluna_alvo = st.selectbox("Coluna a ser alterada", ["Agente", "Ciclo", "Semana", "Quarteirao", "Tipo Imovel", "Vistoria"])
+        with col_em2:
+            valor_antigo_filtro = st.text_input("Filtrar registros onde a coluna é igual a:", placeholder="Ex: Nome antigo do Agente")
+        with col_em3:
+            valor_novo_massa = st.text_input("Novo valor unificado:", placeholder="Ex: Novo Nome do Agente")
 
-        if btn_aplicar_massa and valor_antigo:
-            alterados = 0
+        btn_massa_avancado = st.button("⚡ Executar Substituição em Massa", type="primary", use_container_width=True)
+
+        if btn_massa_avancado and valor_antigo_filtro:
+            contador_alterados = 0
             for item in st.session_state.vistorias:
-                if str(item.get(coluna_alvo, "")).strip().lower() == valor_antigo.strip().lower():
-                    item[coluna_alvo] = valor_novo.strip()
-                    alterados += 1
+                val_atual = str(item.get(coluna_alvo, "")).strip()
+                if val_atual.lower() == valor_antigo_filtro.strip().lower():
+                    item[coluna_alvo] = valor_novo_massa.strip()
+                    contador_alterados += 1
             salvar_estado_local()
-            st.success(f"✅ {alterados} registros atualizados em massa!")
+            st.success(f"✅ Sucesso! {contador_alterados} registros tiveram a coluna **{coluna_alvo}** alterada para '**{valor_novo_massa}**'.")
             st.rerun()
+            
+        st.markdown("---")
+        st.markdown("### 🗑️ Exclusão Seletiva em Massa por Quarteirão")
+        q_para_apagar = st.selectbox("Selecione um Quarteirão para apagar todos os seus registros", options=[""] + sorted(df_gerencia["Quarteirao"].unique().tolist()))
+        if q_para_apagar:
+            if st.button(f"🗑️ Deletar todos os dados do Quarteirão {q_para_apagar}", type="secondary"):
+                st.session_state.vistorias = [v for v in st.session_state.vistorias if str(v.get("Quarteirao")) != str(q_para_apagar)]
+                salvar_estado_local()
+                st.success(f"🗑️ Registros do Quarteirão {q_para_apagar} removidos!")
+                st.rerun()
     else:
         st.info("Nenhum lançamento registrado.")
 
@@ -464,6 +483,9 @@ with aba_tratamentos:
         tm1, tm2 = st.columns(2)
         tm1.metric("🏠 Imóveis Tratados", tot_tratados)
         tm2.metric("⚖️ Larvicida Aplicado (g)", f"{tot_gramas:.1f}g")
+        
+        st.markdown("---")
+        st.dataframe(colorir_tabela_vistorias(df_trat[df_trat["Tratados"] > 0]), use_container_width=True)
     else:
         st.info("Nenhum lançamento registrado.")
 
